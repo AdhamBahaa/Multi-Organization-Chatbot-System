@@ -1,20 +1,93 @@
 """
 Pydantic models for the RAG Chatbot Backend
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional, List
+from datetime import datetime
 
+# Authentication Models
 class LoginRequest(BaseModel):
-    username: str
+    email: str
     password: str
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str
     user_id: int
-    username: str
+    email: str
+    role: str
+    organization_id: int
+    admin_id: Optional[int] = None
+
+# Organization Models
+class OrganizationCreate(BaseModel):
+    name: str
+
+class OrganizationUpdate(BaseModel):
+    name: str
+
+class OrganizationResponse(BaseModel):
+    organization_id: int
+    name: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Admin Models
+class AdminCreate(BaseModel):
+    organization_id: int
+    full_name: str
+    email: EmailStr
+
+class AdminUpdate(BaseModel):
+    full_name: str
+    email: EmailStr
+
+class AdminResponse(BaseModel):
+    admin_id: int
+    organization_id: int
+    full_name: str
+    email: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# User Models
+class UserCreate(BaseModel):
+    admin_id: int
+    full_name: str
+    email: EmailStr
+    role: str = "Member"  # Default to 'Member' to match database
+
+class UserUpdate(BaseModel):
+    full_name: str
+    email: EmailStr
     role: str
 
+class UserResponse(BaseModel):
+    user_id: int
+    admin_id: int
+    organization_id: int
+    full_name: str
+    email: str
+    role: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Password Management Models
+class SetPasswordRequest(BaseModel):
+    email: str
+    password: str
+
+class UpdateProfileRequest(BaseModel):
+    full_name: str
+    email: EmailStr
+
+# Chat Models
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[int] = None
@@ -27,6 +100,7 @@ class ChatResponse(BaseModel):
     confidence: float = 0.0
     chunks_found: int = 0
 
+# System Models
 class SystemStatsResponse(BaseModel):
     total_documents: int
     total_chunks: int

@@ -1,248 +1,158 @@
 # RAG Chatbot Backend
 
-A modular FastAPI backend for a RAG (Retrieval-Augmented Generation) chatbot system.
+A FastAPI-based backend for a RAG (Retrieval-Augmented Generation) chatbot with hierarchical user management.
 
-## Project Structure
+## Features
 
+- **Hierarchical User Management**: Super Admin → Organizations → Admins → Users
+- **JWT Authentication**: Secure token-based authentication
+- **Role-Based Access Control**: Different permissions for different user types
+- **Document Management**: Upload, process, and query documents
+- **AI Chat**: Powered by Google Gemini API
+- **Vector Database**: ChromaDB for document embeddings
+
+## User Hierarchy
+
+1. **Super Admin** (Only one exists)
+
+   - Can create Organizations
+   - Can create Admins for Organizations
+   - System-wide access
+
+2. **Admin** (Multiple per Organization)
+
+   - Can create Users within their Organization
+   - Manages their Organization's users
+   - Organization-scoped access
+   - Multiple admins can collaborate within the same organization
+
+3. **User** (Multiple per Organization)
+
+   - Belongs to one Organization
+   - Managed by one Admin
+   - Has a specific role within the organization
+   - Basic access to chat and documents
+
+### User Management
+
+- **Create Users**: Admins can create users in their organization
+- **Automatic Organization Assignment**: Users are automatically assigned to the Admin's organization
+- **User Roles**: Unlimited custom roles (default: "Member")
+- **Password Management**: Users set their own passwords
+- **Profile Updates**: Users can update their information
+
+### User Roles
+
+- **Super Admin**: System-wide access, manages organizations and admins
+- **Admin**: Organization-level access, manages users within their organization
+- **User**: Regular users with customizable roles (e.g., Member, Moderator, Analyst, Developer, Manager, etc.)
+- **Default Role**: "Member" (can be changed to any custom role)
+
+Roles are completely customizable - you can use any role name that fits your organization's needs.
+
+## Database Schema
+
+The system uses SQL Server with the following tables:
+
+- **Organizations**: Company/team entities
+- **Admins**: Organization administrators (multiple per organization)
+- **Users**: Regular users managed by admins
+
+## Setup Instructions
+
+### 1. Prerequisites
+
+- Python 3.8+
+- SQL Server with ODBC Driver 17
+- Google Gemini API key
+
+### 2. Database Setup
+
+Your database schema is already created in SQL Server. The system expects the following tables:
+
+- **Organizations**: Company/team entities
+- **Admins**: Organization administrators (multiple per organization)
+- **Users**: Regular users managed by admins (with Role column)
+
+The database will remain empty until you manually create organizations, admins, and users through the API endpoints.
+
+### 3. Environment Configuration
+
+Create a `.env` file in the backend directory:
+
+```env
+# Database Configuration
+DB_USER=sa
+DB_PASSWORD=your_password_here
+DB_HOST=localhost
+DB_NAME=chatbot
+DB_DRIVER=ODBC+Driver+17+for+SQL+Server
+
+# Google Gemini API
+GOOGLE_API_KEY=your_gemini_api_key_here
+
+# JWT Secret Key (change this in production)
+SECRET_KEY=your-super-secret-key-here-change-in-production
+
+# API Configuration
+API_HOST=0.0.0.0
+API_PORT=8002
+
+# CORS Origins
+CORS_ORIGINS=["http://localhost:3000"]
 ```
-backend/
-├── app/
-│   ├── __init__.py          # Package initialization
-│   ├── config.py            # Configuration settings
-│   ├── models.py            # Pydantic models
-│   ├── auth.py              # Authentication logic
-│   ├── chat.py              # Chat and AI functionality
-│   ├── documents.py         # Document management
-│   ├── routes.py            # API routes
-│   ├── utils.py             # Utility functions
-│   ├── vector_db.py         # ChromaDB vector database
-│   ├── document_store.py    # Persistent document registry
-│   └── cleanup.py           # System cleanup utilities
-├── shared_uploads/          # Team documents (version controlled)
-│   ├── README.md           # Team guidelines
-│   ├── document_registry.json
-│   ├── chroma_db/
-│   └── [team_documents]
-├── main.py                  # Main application entry point
-├── requirements.txt         # Python dependencies
-└── README.md               # This file
-```
 
-## Modules Overview
-
-### `config.py`
-
-- Environment variables and configuration settings
-- API keys, CORS settings, file type configurations
-- Demo user data (for development)
-
-### `models.py`
-
-- Pydantic models for request/response validation
-- Login, chat, document, and system stats models
-
-### `auth.py`
-
-- User authentication logic
-- Login endpoint handlers
-- User information retrieval
-
-### `chat.py`
-
-- AI chat functionality using Google Gemini
-- RAG (Retrieval-Augmented Generation) implementation
-- Document search and context building
-
-### `documents.py`
-
-- Document upload, retrieval, and deletion
-- File processing and text extraction
-- System statistics
-
-### `routes.py`
-
-- All API endpoint definitions
-- Route handlers and request/response mapping
-
-### `utils.py`
-
-- File processing utilities
-- Text extraction from various file formats
-- Document search functionality (now uses ChromaDB)
-- File system operations
-
-### `vector_db.py`
-
-- ChromaDB vector database integration
-- Document embedding and storage
-- Semantic search functionality
-- Vector similarity search
-
-### `document_store.py`
-
-- Persistent document registry
-- JSON-based document metadata storage
-- Automatic loading of existing documents on startup
-- Data consistency management
-
-### `cleanup.py`
-
-- System cleanup utilities
-- Orphaned file detection and removal
-- ChromaDB entry validation
-- Registry consistency checks
-
-## Getting Started
-
-1. Install dependencies:
+### 4. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-2. Set up environment variables:
-
-```bash
-# Create a .env file with:
-GOOGLE_API_KEY=your_gemini_api_key_here
-```
-
-3. Run the application:
+### 5. Start the Application
 
 ```bash
 python main.py
 ```
 
-**🔗 Team Mode**: This project is configured for shared team development. All team members see the same documents.
+The API will be available at `http://localhost:8002`
 
 ## API Endpoints
 
-- `POST /api/login` - User authentication
-- `GET /api/me` - Get current user info
-- `POST /api/chat` - Send chat message
-- `GET /api/sessions` - Get chat sessions
-- `GET /api/documents` - Get all documents
-- `POST /api/documents/upload` - Upload document
-- `DELETE /api/documents/{id}` - Delete document
-- `GET /api/system/stats` - Get system statistics
-- `GET /health` - Health check
+### Authentication
 
-## Benefits of This Structure
+- `POST /api/login` - User login
+- `POST /api/set-password` - Set initial password
+- `PUT /api/profile` - Update user profile
+- `POST /api/change-password` - Change password
 
-1. **Modularity**: Each concern is separated into its own module
-2. **Maintainability**: Easy to locate and modify specific functionality
-3. **Testability**: Individual modules can be tested in isolation
-4. **Scalability**: Easy to add new features or modify existing ones
-5. **Readability**: Clear separation of concerns makes code easier to understand
-6. **Reusability**: Utility functions and models can be reused across modules
-7. **Vector Search**: ChromaDB integration provides semantic search capabilities
+### Super Admin Operations
 
-## Development
+#### Organizations
 
-To add new features:
+- `POST /api/organizations` - Create organization
+- `GET /api/organizations` - List all organizations
+- `GET /api/organizations/{id}` - Get organization details
+- `PUT /api/organizations/{id}` - Update organization
+- `DELETE /api/organizations/{id}` - Delete organization
 
-1. Add new models to `models.py`
-2. Create business logic in appropriate module
-3. Add routes to `routes.py`
-4. Update configuration in `config.py` if needed
+#### Admins
 
-## File Processing
+- `POST /api/admins` - Create admin
+- `GET /api/admins` - List all admins
+- `GET /api/admins/{id}` - Get admin details
+- `PUT /api/admins/{id}` - Update admin
+- `DELETE /api/admins/{id}` - Delete admin
 
-The system supports:
+### Admin Operations
 
-- PDF files (using PyPDF2)
-- Word documents (DOC/DOCX using python-docx)
-- Text files (TXT)
-- CSV files
+#### Users
 
-Text extraction is handled automatically during upload, and the extracted text is used for RAG functionality.
+- `POST /api/users` - Create user
+- `GET /api/users` - List organization users
+- `GET /api/users/{id}` - Get user details
+- `PUT /api/users/{id}` - Update user
+- `DELETE /api/users/{id}` - Delete user
 
-## Vector Database (ChromaDB)
+### User Operations
 
-The system now uses ChromaDB for:
-
-- **Semantic Search**: Documents are embedded and stored as vectors
-- **Chunking**: Documents are automatically split into manageable chunks
-- **Similarity Search**: Queries are matched using vector similarity
-- **Persistent Storage**: Vector embeddings are stored persistently
-- **Metadata Storage**: Document metadata is stored alongside embeddings
-
-This provides much more accurate and contextually relevant search results compared to simple keyword matching.
-
-## Document Persistence
-
-The system provides robust document persistence with team collaboration:
-
-- **Persistent Registry**: Documents are stored in a JSON registry file
-- **Automatic Loading**: Existing documents are loaded on server startup
-- **Data Consistency**: Automatic cleanup of orphaned files and entries
-- **Complete Deletion**: When documents are deleted, they're removed from:
-  - File system (actual files)
-  - Document registry (metadata)
-  - ChromaDB (vector embeddings)
-- **Team Sharing**: All documents are shared across team members
-
-### Data Storage Structure
-
-```
-backend/shared_uploads/
-├── document_registry.json    # Document metadata registry
-├── chroma_db/               # ChromaDB vector database
-└── [document_files]         # Actual uploaded files
-```
-
-The `shared_uploads/` directory is version controlled, ensuring all team members have the same documents.
-
-## Team Development Guide
-
-### 🔗 Shared Team Development
-
-This project is configured for **shared team development only**. All team members work with the same document set, making collaboration seamless and consistent.
-
-### Team Workflow
-
-#### For Feature Development:
-
-1. **Upload Test Documents**: Use consistent naming (e.g., `test_feature_x.pdf`)
-2. **Test as Team**: Everyone can see and interact with the same documents
-3. **Coordinate Changes**: Communicate before deleting or modifying documents
-
-#### For Bug Fixing:
-
-1. **Reproduce in Shared Environment**: Upload the problematic document
-2. **Debug Together**: All team members can see the issue
-3. **Test Fix**: Everyone can verify the solution works
-4. **Document the Fix**: Add notes about the solution
-
-#### For Testing:
-
-1. **Create Test Suite**: Upload a standard set of test documents
-2. **Share Test Cases**: Everyone has the same test data
-3. **Run Tests**: All team members can run the same test scenarios
-
-### Team Guidelines
-
-#### Document Management:
-
-- ✅ Use descriptive file names: `test_feature_x.pdf`, `bug_reproduction.docx`
-- ✅ Communicate before deleting documents
-- ✅ Keep test documents organized
-- ✅ Document what each test document is for
-- ⚠️ Don't upload sensitive or personal documents
-- ⚠️ Coordinate document management with team
-
-#### Team Coordination:
-
-- Always check which documents are available before uploading
-- Use clear naming conventions for test documents
-- Coordinate document management with team
-- Consider creating a team convention for document organization
-
-### Version Control
-
-The `shared_uploads/` directory is **NOT** gitignored, so:
-
-- Documents will be committed to the repository
-- All team members will have the same documents
-- Changes are tracked in version control
-- Team can see document history and changes
+- `GET /api/profile` - Get user profile

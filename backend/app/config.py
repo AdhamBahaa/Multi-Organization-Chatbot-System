@@ -12,8 +12,18 @@ API_KEY = os.getenv("GOOGLE_API_KEY")
 API_HOST = "0.0.0.0"
 API_PORT = 8002
 
-# CORS Configuration
-CORS_ORIGINS = ["http://localhost:3000"]
+# CORS Configuration - Allow team access
+CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:3002",
+    "http://localhost:3003",
+    "http://localhost:3004",
+    "http://localhost:3005",
+    # Add your friends' IP addresses here
+    "http://192.168.1.*:3000",  # Example: Allow all devices in your network
+    "http://10.0.0.*:3000",     # Example: Another common network range
+]
 
 # File Upload Configuration
 ALLOWED_FILE_TYPES = {
