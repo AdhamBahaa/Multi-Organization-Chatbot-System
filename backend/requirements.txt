@@ -5,6 +5,7 @@ python-multipart==0.0.6
 
 # Database
 sqlalchemy==2.0.23
+pyodbc==4.0.39
 
 # Authentication
 python-jose[cryptography]==3.3.0
@@ -22,6 +23,7 @@ pandas==2.1.4
 
 # Data validation
 pydantic==2.5.0
+email-validator==2.1.0
 
 # File handling
 aiofiles==23.2.0
