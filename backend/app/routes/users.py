@@ -7,6 +7,7 @@ from typing import List
 from ..database import get_db, Admin, User
 from ..models import UserCreate, UserUpdate, UserResponse
 from ..auth import get_current_admin
+from ..email_service import email_service
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -47,6 +48,24 @@ async def create_user(
     db.commit()
     db.refresh(user)
     
+    # Generate setup link for the new user
+    setup_link = f"/setup-password?email={user.Email}"
+    
+    # Send setup email to the new user
+    try:
+        email_sent = email_service.send_setup_email(
+            to_email=user.Email,
+            full_name=user.FullName,
+            setup_link=setup_link,
+            role="user"
+        )
+        if email_sent:
+            print(f"✅ Setup email sent to user: {user.Email}")
+        else:
+            print(f"⚠️ Failed to send setup email to user: {user.Email}")
+    except Exception as e:
+        print(f"❌ Error sending setup email to user {user.Email}: {e}")
+    
     return UserResponse(
         user_id=user.UserID,
         admin_id=user.AdminID,
@@ -54,7 +73,8 @@ async def create_user(
         full_name=user.FullName,
         email=user.Email,
         role=user.Role,
-        created_at=user.CreatedAt
+        created_at=user.CreatedAt,
+        setup_link=setup_link
     )
 
 @router.get("", response_model=List[UserResponse])

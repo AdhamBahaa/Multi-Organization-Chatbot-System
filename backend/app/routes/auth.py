@@ -7,6 +7,7 @@ from typing import Union
 from ..database import get_db, Admin, User
 from ..models import LoginRequest, TokenResponse, SetPasswordRequest, UpdateProfileRequest
 from ..auth import AuthManager, get_current_user, create_user_token
+from ..email_service import email_service
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -29,10 +30,26 @@ async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
         token_response = create_user_token(super_admin_obj, "super_admin")
         return token_response
     
+    # Check if admin exists but has no password (first-time setup)
+    admin = db.query(Admin).filter(Admin.Email == login_data.email).first()
+    if admin and admin.PasswordHash is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Password not set. Please use the setup link to set your password."
+        )
+    
     # Try to authenticate as Admin
     admin = AuthManager.authenticate_admin(db, login_data.email, login_data.password)
     if admin:
         return create_user_token(admin, "admin")
+    
+    # Check if user exists but has no password (first-time setup)
+    user = db.query(User).filter(User.Email == login_data.email).first()
+    if user and user.PasswordHash is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Password not set. Please use the setup link to set your password."
+        )
     
     # Try to authenticate as User
     user = AuthManager.authenticate_user(db, login_data.email, login_data.password)
@@ -64,6 +81,17 @@ async def set_password(
         # Set password for admin
         admin.PasswordHash = AuthManager.get_password_hash(password_data.password)
         db.commit()
+        
+        # Send welcome email to admin
+        try:
+            email_service.send_welcome_email(
+                to_email=admin.Email,
+                full_name=admin.FullName,
+                role="admin"
+            )
+        except Exception as e:
+            print(f"❌ Error sending welcome email to admin {admin.Email}: {e}")
+        
         return {"message": "Admin password set successfully"}
     
     # Check if user exists
@@ -78,6 +106,17 @@ async def set_password(
         # Set password for user
         user.PasswordHash = AuthManager.get_password_hash(password_data.password)
         db.commit()
+        
+        # Send welcome email to user
+        try:
+            email_service.send_welcome_email(
+                to_email=user.Email,
+                full_name=user.FullName,
+                role="user"
+            )
+        except Exception as e:
+            print(f"❌ Error sending welcome email to user {user.Email}: {e}")
+        
         return {"message": "User password set successfully"}
     
     raise HTTPException(
@@ -144,11 +183,13 @@ async def change_password(
 async def get_user_profile(current_user: Union[Admin, User] = Depends(get_current_user)):
     """Get current user profile"""
     if isinstance(current_user, Admin):
+        # Check if this is Super Admin (AdminID = 0)
+        role = "super_admin" if current_user.AdminID == 0 else "admin"
         return {
             "user_id": current_user.AdminID,
             "email": current_user.Email,
             "full_name": current_user.FullName,
-            "role": "admin",
+            "role": role,
             "organization_id": current_user.OrganizationID,
             "created_at": current_user.CreatedAt
         }
@@ -162,3 +203,32 @@ async def get_user_profile(current_user: Union[Admin, User] = Depends(get_curren
             "organization_id": current_user.OrganizationID,
             "created_at": current_user.CreatedAt
         }
+
+@router.get("/my-organization")
+async def get_my_organization(
+    current_user: Union[Admin, User] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get organization information for the current user"""
+    from ..database import Organization
+    
+    organization = db.query(Organization).filter(
+        Organization.OrganizationID == current_user.OrganizationID
+    ).first()
+    
+    if not organization:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found"
+        )
+    
+    return {
+        "organization_id": organization.OrganizationID,
+        "name": organization.Name,
+        "created_at": organization.CreatedAt
+    }
+
+@router.post("/logout")
+async def logout():
+    """Logout endpoint (client-side token removal)"""
+    return {"message": "Logged out successfully"}

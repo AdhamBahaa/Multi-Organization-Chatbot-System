@@ -7,6 +7,7 @@ from typing import List
 from ..database import get_db, Organization, Admin
 from ..models import AdminCreate, AdminUpdate, AdminResponse
 from ..auth import get_current_super_admin
+from ..email_service import email_service
 
 router = APIRouter(prefix="/admins", tags=["Admins"])
 
@@ -47,12 +48,31 @@ async def create_admin(
     db.commit()
     db.refresh(admin)
     
+    # Generate setup link for the new admin
+    setup_link = f"/setup-password?email={admin.Email}"
+    
+    # Send setup email to the new admin
+    try:
+        email_sent = email_service.send_setup_email(
+            to_email=admin.Email,
+            full_name=admin.FullName,
+            setup_link=setup_link,
+            role="admin"
+        )
+        if email_sent:
+            print(f"✅ Setup email sent to admin: {admin.Email}")
+        else:
+            print(f"⚠️ Failed to send setup email to admin: {admin.Email}")
+    except Exception as e:
+        print(f"❌ Error sending setup email to admin {admin.Email}: {e}")
+    
     return AdminResponse(
         admin_id=admin.AdminID,
         organization_id=admin.OrganizationID,
         full_name=admin.FullName,
         email=admin.Email,
-        created_at=admin.CreatedAt
+        created_at=admin.CreatedAt,
+        setup_link=setup_link
     )
 
 @router.get("", response_model=List[AdminResponse])

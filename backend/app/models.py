@@ -15,6 +15,7 @@ class TokenResponse(BaseModel):
     token_type: str
     user_id: int
     email: str
+    full_name: str
     role: str
     organization_id: int
     admin_id: Optional[int] = None
@@ -50,6 +51,7 @@ class AdminResponse(BaseModel):
     full_name: str
     email: str
     created_at: datetime
+    setup_link: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -74,6 +76,7 @@ class UserResponse(BaseModel):
     email: str
     role: str
     created_at: datetime
+    setup_link: Optional[str] = None
 
     class Config:
         from_attributes = True

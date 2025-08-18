@@ -196,6 +196,7 @@ def create_user_token(user: Union[Admin, User], role: str) -> TokenResponse:
         token_type="bearer",
         user_id=user_id,
         email=user.Email,
+        full_name=user.FullName,
         role=role,
         organization_id=organization_id,
         admin_id=admin_id

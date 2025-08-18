@@ -1,103 +1,94 @@
-import React, { useState } from 'react';
-import { login } from './api';
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { login } from "./api";
+import "./Login.css";
 
-function Login({ onLogin }) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+const Login = () => {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
     setLoading(true);
-    setError('');
-    
+
     try {
-      const result = await login(username, password);
-      localStorage.setItem('token', result.token);
-      localStorage.setItem('user', JSON.stringify(result.user));
-      onLogin(result.user);
+      const result = await login(email, password);
+      console.log("Login successful:", result);
+
+      // Redirect to dashboard
+      navigate("/dashboard");
     } catch (err) {
-      setError(err.message);
+      // Check if this is a password setup required error
+      if (err.message.includes("Password not set")) {
+        // Redirect to password setup page with email parameter
+        navigate(`/setup-password?email=${encodeURIComponent(email)}`);
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const fillDemo = (type) => {
-    if (type === 'admin') {
-      setUsername('admin');
-      setPassword('admin123');
-    } else {
-      setUsername('user');
-      setPassword('user123');
-    }
-  };
-
   return (
-    <div className="container">
-      <div className="header">
-        <h1>RAG Chatbot</h1>
-        <p>Simple Document-Based AI Assistant</p>
-      </div>
-      
-      <div className="card" style={{maxWidth: '400px', margin: '0 auto'}}>
-        <h2>Sign In</h2>
-        
-        <form onSubmit={handleSubmit}>
+    <div className="login-container">
+      <div className="login-card">
+        <div className="login-header">
+          <h1>🤖 RAG Chatbot</h1>
+          <p>Sign in to your account</p>
+        </div>
+
+        {error && <div className="error-message">{error}</div>}
+
+        <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
-            <label>Username</label>
+            <label htmlFor="email">Email</label>
             <input
-              type="text"
-              className="input"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              type="email"
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
+              placeholder="Enter your email"
             />
           </div>
-          
+
           <div className="form-group">
-            <label>Password</label>
+            <label htmlFor="password">Password</label>
             <input
               type="password"
-              className="input"
+              id="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              placeholder="Enter your password"
             />
           </div>
-          
-          {error && <div className="error">{error}</div>}
-          
-          <button type="submit" className="button" disabled={loading}>
-            {loading ? 'Signing in...' : 'Sign In'}
+
+          <button type="submit" className="login-button" disabled={loading}>
+            {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
-        
-        <div style={{marginTop: '20px', padding: '15px', background: '#f9fafb', borderRadius: '6px'}}>
-          <p style={{margin: '0 0 10px 0', fontSize: '14px', color: '#6b7280'}}>Demo Accounts:</p>
-          <div style={{display: 'flex', gap: '10px'}}>
-            <button 
-              type="button" 
-              className="button" 
-              style={{background: '#10b981', fontSize: '12px', padding: '8px 12px'}}
-              onClick={() => fillDemo('admin')}
-            >
-              Admin Demo
-            </button>
-            <button 
-              type="button" 
-              className="button" 
-              style={{background: '#8b5cf6', fontSize: '12px', padding: '8px 12px'}}
-              onClick={() => fillDemo('user')}
-            >
-              User Demo
-            </button>
+
+        <div className="login-footer">
+          <p>Demo Credentials:</p>
+          <div className="demo-credentials">
+            <div>
+              <strong>Super Admin:</strong>
+              <br />
+              Email: superadmin@system.com
+              <br />
+              Password: superadmin123
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
-}
+};
 
 export default Login;

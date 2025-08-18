@@ -41,6 +41,52 @@ A FastAPI-based backend for a RAG (Retrieval-Augmented Generation) chatbot with 
 - **Password Management**: Users set their own passwords
 - **Profile Updates**: Users can update their information
 
+### First-Time Password Setup
+
+When Super Admins create new Admins or Admins create new Users, these accounts are created without passwords. The system provides a secure password setup flow:
+
+1. **Setup Links**: When creating new admins/users, the system generates setup links
+2. **Password Setup Page**: New users visit the setup link to set their initial password
+3. **Secure Process**: Passwords are validated and securely hashed
+4. **Automatic Redirect**: After setup, users are redirected to the login page
+
+**Setup Link Format**: `/setup-password?email=user@example.com`
+
+**Features**:
+
+- **Automatic email delivery** when accounts are created
+- **Professional HTML emails** with branding and instructions
+- **Password validation** (minimum 6 characters)
+- **Password confirmation**
+- **Secure password hashing**
+- **Automatic login redirect** after setup
+- **Welcome email** sent after password setup
+- **Copy-to-clipboard functionality** for manual setup links
+- **Fallback manual links** for email delivery issues
+
+### Email Configuration
+
+Add these variables to your `.env` file for automatic email delivery:
+
+```env
+# Email Configuration (Gmail Example)
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+FROM_EMAIL=noreply@yourcompany.com
+APP_NAME=RAG Chatbot System
+APP_URL=http://localhost:3000
+```
+
+**How to Get Gmail App Password:**
+
+1. Go to your Google Account settings
+2. Enable 2-Factor Authentication
+3. Go to Security > App passwords
+4. Generate a new app password for "Mail"
+5. Use that password in `SMTP_PASSWORD`
+
 ### User Roles
 
 - **Super Admin**: System-wide access, manages organizations and admins

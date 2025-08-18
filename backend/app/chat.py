@@ -14,8 +14,11 @@ def configure_gemini():
 async def generate_chat_response(chat_data: ChatRequest) -> ChatResponse:
     """Generate AI-powered response with RAG functionality"""
     
+    print(f"🤖 Generating response for: '{chat_data.message}'")
+    
     # Search through uploaded documents
     search_results = search_documents(chat_data.message)
+    print(f"📋 Search returned {len(search_results)} document results")
     
     # Prepare context from documents
     document_context = ""
@@ -34,6 +37,11 @@ async def generate_chat_response(chat_data: ChatRequest) -> ChatResponse:
                 "filename": result['filename'],
                 "relevance": result['relevance']
             })
+        
+        print(f"📄 Using context from {len(sources)} documents")
+    else:
+        print("⚠️ No relevant documents found")
+        document_context = "\n\nNo relevant information found in uploaded documents."
     
     # Generate response using Gemini with document context
     try:

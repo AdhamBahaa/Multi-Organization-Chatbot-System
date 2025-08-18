@@ -29,7 +29,7 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 || error.response?.status === 403) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       window.location.reload();
@@ -41,7 +41,7 @@ api.interceptors.response.use(
 // Auth API
 export const login = async (email, password) => {
   try {
-    const response = await api.post("/login", { email, password });
+    const response = await api.post("/auth/login", { email, password });
     const data = response.data;
 
     // Store token and user info
@@ -51,6 +51,7 @@ export const login = async (email, password) => {
       JSON.stringify({
         id: data.user_id,
         email: data.email,
+        full_name: data.full_name,
         role: data.role,
         organization_id: data.organization_id,
         admin_id: data.admin_id,
@@ -62,6 +63,7 @@ export const login = async (email, password) => {
       user: {
         id: data.user_id,
         email: data.email,
+        full_name: data.full_name,
         role: data.role,
         organization_id: data.organization_id,
         admin_id: data.admin_id,
@@ -78,10 +80,52 @@ export const login = async (email, password) => {
 
 export const getCurrentUser = async () => {
   try {
-    const response = await api.get("/profile");
+    const response = await api.get("/auth/profile");
     return response.data;
   } catch (error) {
     throw new Error("Failed to get user info");
+  }
+};
+
+export const getMyOrganization = async () => {
+  try {
+    const response = await api.get("/auth/my-organization");
+    return response.data;
+  } catch (error) {
+    console.error(
+      "Get my organization error:",
+      error.response?.data?.detail || error.message
+    );
+    throw new Error(
+      error.response?.data?.detail || "Failed to get organization info"
+    );
+  }
+};
+
+export const setPassword = async (email, password) => {
+  try {
+    const response = await api.post("/auth/set-password", {
+      email,
+      password,
+    });
+    return response.data;
+  } catch (error) {
+    console.error(
+      "Set password error:",
+      error.response?.data?.detail || error.message
+    );
+    throw new Error(error.response?.data?.detail || "Failed to set password");
+  }
+};
+
+export const logout = async () => {
+  try {
+    await api.post("/auth/logout");
+  } catch (error) {
+    console.error("Logout error:", error);
+  } finally {
+    // Always clear localStorage regardless of API call success
+    localStorage.clear();
   }
 };
 
