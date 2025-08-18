@@ -1,6 +1,5 @@
 import axios from "axios";
-
-const API_BASE = "http://localhost:8002/api";
+import { API_BASE } from "./config";
 
 // Create axios instance
 const api = axios.create({
@@ -53,6 +52,7 @@ export const login = async (email, password) => {
         email: data.email,
         full_name: data.full_name,
         role: data.role,
+        organization_role: data.organization_role,
         organization_id: data.organization_id,
         admin_id: data.admin_id,
       })
@@ -65,6 +65,7 @@ export const login = async (email, password) => {
         email: data.email,
         full_name: data.full_name,
         role: data.role,
+        organization_role: data.organization_role,
         organization_id: data.organization_id,
         admin_id: data.admin_id,
       },
@@ -102,6 +103,19 @@ export const getMyOrganization = async () => {
   }
 };
 
+export const getMyAdmin = async () => {
+  try {
+    const response = await api.get("/auth/my-admin");
+    return response.data;
+  } catch (error) {
+    console.error(
+      "Get my admin error:",
+      error.response?.data?.detail || error.message
+    );
+    throw new Error(error.response?.data?.detail || "Failed to get admin info");
+  }
+};
+
 export const setPassword = async (email, password) => {
   try {
     const response = await api.post("/auth/set-password", {
@@ -115,6 +129,24 @@ export const setPassword = async (email, password) => {
       error.response?.data?.detail || error.message
     );
     throw new Error(error.response?.data?.detail || "Failed to set password");
+  }
+};
+
+export const changePassword = async (currentPassword, newPassword) => {
+  try {
+    const response = await api.post("/auth/change-password", {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+    return response.data;
+  } catch (error) {
+    console.error(
+      "Change password error:",
+      error.response?.data?.detail || error.message
+    );
+    throw new Error(
+      error.response?.data?.detail || "Failed to change password"
+    );
   }
 };
 

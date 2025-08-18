@@ -3,8 +3,7 @@ import UserProfile from "../components/UserProfile";
 import OrganizationInfo from "../components/OrganizationInfo";
 import Chat from "../Chat";
 import Documents from "../Documents";
-import Settings from "../Settings";
-import { getMyOrganization } from "../api";
+import { getMyOrganization, getMyAdmin } from "../api";
 import "./UserDashboard.css";
 
 const UserDashboard = ({ user, onLogout }) => {
@@ -22,12 +21,12 @@ const UserDashboard = ({ user, onLogout }) => {
 
   const loadUserInfo = async () => {
     try {
-      // You can add API call here to get detailed user info
+      // Use the actual user data from login response
       setUserInfo({
         id: user.id,
         email: user.email,
-        fullName: "Your Name", // This should come from API
-        role: "Member", // This should come from API
+        fullName: user.full_name,
+        role: user.organization_role || user.role, // Use organization role if available, fallback to system role
         createdAt: new Date().toLocaleDateString(),
       });
     } catch (error) {
@@ -37,14 +36,21 @@ const UserDashboard = ({ user, onLogout }) => {
 
   const loadAdminInfo = async () => {
     try {
-      // You can add API call here to get admin info
+      // Fetch admin info using the new endpoint
+      const adminData = await getMyAdmin();
       setAdminInfo({
-        id: user.admin_id,
-        name: "Your Admin", // This should come from API
-        email: "admin@example.com", // This should come from API
+        id: adminData.admin_id,
+        name: adminData.full_name,
+        email: adminData.email,
       });
     } catch (error) {
       console.error("Error loading admin info:", error);
+      // Fallback to basic info
+      setAdminInfo({
+        id: user.admin_id,
+        name: "Admin",
+        email: "admin@example.com",
+      });
     }
   };
 
@@ -74,7 +80,9 @@ const UserDashboard = ({ user, onLogout }) => {
           <div className="user-info">
             <h1>User Dashboard</h1>
             <p>Welcome, {user.full_name}</p>
-            {userInfo && <p className="user-role">Role: {userInfo.role}</p>}
+            {userInfo && (
+              <p className="user-role">Organization Role: {userInfo.role}</p>
+            )}
           </div>
           <div className="header-actions">
             <button onClick={onLogout} className="btn btn-secondary">
@@ -95,7 +103,8 @@ const UserDashboard = ({ user, onLogout }) => {
           </div>
           <div className="info-card">
             <h3>Your Admin</h3>
-            <p className="info-text">Admin ID: {user.admin_id}</p>
+            <p className="info-text">{adminInfo?.name || "Loading..."}</p>
+            <p className="info-text-small">{adminInfo?.email || ""}</p>
           </div>
         </div>
       </div>
@@ -120,12 +129,6 @@ const UserDashboard = ({ user, onLogout }) => {
         >
           📁 Documents
         </button>
-        <button
-          className={`tab-button ${activeTab === "settings" ? "active" : ""}`}
-          onClick={() => setActiveTab("settings")}
-        >
-          ⚙️ Settings
-        </button>
       </div>
 
       {/* Content Area */}
@@ -133,7 +136,6 @@ const UserDashboard = ({ user, onLogout }) => {
         {activeTab === "profile" && <UserProfile userInfo={userInfo} />}
         {activeTab === "chatbot" && <Chat />}
         {activeTab === "documents" && <Documents user={user} />}
-        {activeTab === "settings" && <Settings />}
       </div>
     </div>
   );

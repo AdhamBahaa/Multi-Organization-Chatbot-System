@@ -4,6 +4,7 @@ Authentication and user management routes
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Union
+from pydantic import BaseModel
 from ..database import get_db, Admin, User
 from ..models import LoginRequest, TokenResponse, SetPasswordRequest, UpdateProfileRequest
 from ..auth import AuthManager, get_current_user, create_user_token
@@ -54,7 +55,7 @@ async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     # Try to authenticate as User
     user = AuthManager.authenticate_user(db, login_data.email, login_data.password)
     if user:
-        return create_user_token(user, "user")
+        return create_user_token(user, "user")  # System role is always "user" for regular users
     
     # Authentication failed
     raise HTTPException(
@@ -157,24 +158,27 @@ async def update_profile(
     
     return {"message": "Profile updated successfully"}
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
 @router.post("/change-password")
 async def change_password(
-    current_password: str,
-    new_password: str,
+    password_data: ChangePasswordRequest,
     current_user: Union[Admin, User] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Change password for authenticated user"""
     
     # Verify current password
-    if not AuthManager.verify_password(current_password, current_user.PasswordHash):
+    if not AuthManager.verify_password(password_data.current_password, current_user.PasswordHash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current password is incorrect"
         )
     
     # Update password
-    current_user.PasswordHash = AuthManager.get_password_hash(new_password)
+    current_user.PasswordHash = AuthManager.get_password_hash(password_data.new_password)
     db.commit()
     
     return {"message": "Password changed successfully"}
@@ -226,6 +230,31 @@ async def get_my_organization(
         "organization_id": organization.OrganizationID,
         "name": organization.Name,
         "created_at": organization.CreatedAt
+    }
+
+@router.get("/my-admin")
+async def get_my_admin(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get admin information for the current user"""
+    from ..database import Admin
+    
+    admin = db.query(Admin).filter(
+        Admin.AdminID == current_user.AdminID
+    ).first()
+    
+    if not admin:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Admin not found"
+        )
+    
+    return {
+        "admin_id": admin.AdminID,
+        "full_name": admin.FullName,
+        "email": admin.Email,
+        "created_at": admin.CreatedAt
     }
 
 @router.post("/logout")

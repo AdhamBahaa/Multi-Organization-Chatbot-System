@@ -172,10 +172,12 @@ def create_user_token(user: Union[Admin, User], role: str) -> TokenResponse:
         user_id = user.AdminID
         admin_id = None
         organization_id = user.OrganizationID
+        organization_role = None  # Admins don't have organization-specific roles
     else:
         user_id = user.UserID
         admin_id = user.AdminID
         organization_id = user.OrganizationID
+        organization_role = user.Role  # Get the organization-specific role
     
     token_data = {
         "sub": str(user_id),
@@ -198,6 +200,7 @@ def create_user_token(user: Union[Admin, User], role: str) -> TokenResponse:
         email=user.Email,
         full_name=user.FullName,
         role=role,
+        organization_role=organization_role,
         organization_id=organization_id,
         admin_id=admin_id
     )

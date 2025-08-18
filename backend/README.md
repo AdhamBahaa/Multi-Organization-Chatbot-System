@@ -11,13 +11,16 @@ A FastAPI-based backend for a RAG (Retrieval-Augmented Generation) chatbot with 
 - **AI Chat**: Powered by Google Gemini API
 - **Vector Database**: ChromaDB for document embeddings
 
-## User Hierarchy
+## 🏗️ **Role System**
+
+### **System-Level Roles (3 main roles):**
 
 1. **Super Admin** (Only one exists)
 
    - Can create Organizations
    - Can create Admins for Organizations
    - System-wide access
+   - Manages the entire system
 
 2. **Admin** (Multiple per Organization)
 
@@ -25,13 +28,38 @@ A FastAPI-based backend for a RAG (Retrieval-Augmented Generation) chatbot with 
    - Manages their Organization's users
    - Organization-scoped access
    - Multiple admins can collaborate within the same organization
+   - Can upload and manage documents
+   - Can use chatbot functionality
 
 3. **User** (Multiple per Organization)
-
    - Belongs to one Organization
    - Managed by one Admin
    - Has a specific role within the organization
    - Basic access to chat and documents
+
+### **User-Specific Roles (Organization Roles):**
+
+- Each User has a `Role` field in the database that represents their **organization-specific role**
+- Examples: "Student", "Teacher", "Manager", "Employee", "Member", etc.
+- This role is customizable and unlimited (not restricted to predefined values)
+- Default value: "Member"
+
+### **Role Hierarchy Example:**
+
+```
+Super Admin
+├── Organization 1
+│   ├── Admin 1
+│   │   ├── User 1 (Role: "Student")
+│   │   ├── User 2 (Role: "Teacher")
+│   │   └── User 3 (Role: "Manager")
+│   └── Admin 2
+│       ├── User 4 (Role: "Employee")
+│       └── User 5 (Role: "Intern")
+└── Organization 2
+    └── Admin 3
+        └── User 6 (Role: "Student")
+```
 
 ### User Management
 
@@ -87,14 +115,22 @@ APP_URL=http://localhost:3000
 4. Generate a new app password for "Mail"
 5. Use that password in `SMTP_PASSWORD`
 
-### User Roles
+### User Roles Clarification
+
+**System-Level Roles:**
 
 - **Super Admin**: System-wide access, manages organizations and admins
 - **Admin**: Organization-level access, manages users within their organization
-- **User**: Regular users with customizable roles (e.g., Member, Moderator, Analyst, Developer, Manager, etc.)
-- **Default Role**: "Member" (can be changed to any custom role)
+- **User**: Regular users with organization-specific roles
 
-Roles are completely customizable - you can use any role name that fits your organization's needs.
+**Organization-Specific Roles:**
+
+- Each User has a `Role` field that represents their role within the organization
+- Examples: "Student", "Teacher", "Manager", "Employee", "Member", etc.
+- **Default Role**: "Member" (can be changed to any custom role)
+- **Completely customizable** - you can use any role name that fits your organization's needs
+
+**Important:** The system-level role (Super Admin/Admin/User) determines permissions, while the organization-specific role (Student/Teacher/etc.) is for organizational purposes.
 
 ## Database Schema
 

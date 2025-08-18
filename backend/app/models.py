@@ -16,7 +16,8 @@ class TokenResponse(BaseModel):
     user_id: int
     email: str
     full_name: str
-    role: str
+    role: str  # System role: super_admin, admin, user
+    organization_role: Optional[str] = None  # Organization-specific role: Student, Teacher, etc.
     organization_id: int
     admin_id: Optional[int] = None
 

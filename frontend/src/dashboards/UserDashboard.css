@@ -53,6 +53,12 @@
   margin-left: 16px;
 }
 
+.info-text-small {
+  font-size: 14px;
+  color: #666;
+  margin-top: 4px;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .admin-info-section {
