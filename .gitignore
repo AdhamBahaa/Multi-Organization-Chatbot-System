@@ -55,3 +55,5 @@ backend/shared_uploads/chroma_db/*.bin
 
 # Keep team documents but ignore database files
 # Team documents are version controlled in shared_uploads/
+backend/shared_uploads/*
+!backend/shared_uploads/.gitkeep

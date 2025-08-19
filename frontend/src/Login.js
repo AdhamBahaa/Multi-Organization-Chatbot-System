@@ -74,7 +74,7 @@ const Login = () => {
           </button>
         </form>
 
-        <div className="login-footer">
+        {/* <div className="login-footer">
           <p>Demo Credentials:</p>
           <div className="demo-credentials">
             <div>
@@ -85,7 +85,7 @@ const Login = () => {
               Password: superadmin123
             </div>
           </div>
-        </div>
+        </div> */}
       </div>
     </div>
   );
