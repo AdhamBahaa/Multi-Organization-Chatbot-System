@@ -10,17 +10,30 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from .database import get_db, Admin, User, Organization
 from .models import TokenResponse
+from dotenv import load_dotenv
+import os
 
-import secrets
+# import secrets
 
-# Generate a cryptographically secure random key
-SECRET_KEY = secrets.token_urlsafe(32)
-# Result: something like: "abc123def456ghi789jkl012mno345pqr678stu901vwx234yz"
+# # Generate a cryptographically secure random key
+# SECRET_KEY = secrets.token_urlsafe(32)
+# # Result: something like: "abc123def456ghi789jkl012mno345pqr678stu901vwx234yz"
 
-# Security configuration
-# SECRET_KEY = "your-secret-key-here"  # Change this in production
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+# # Security configuration
+# # SECRET_KEY = "your-secret-key-here"  # Change this in production
+# ALGORITHM = "HS256"
+# ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# Load environment variables from .env
+load_dotenv()
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")  # default to HS256 if not in .env
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
+
+# print("SECRET_KEY:", SECRET_KEY)
+# print("ALGORITHM:", ALGORITHM)
+# print("TOKEN EXPIRY:", ACCESS_TOKEN_EXPIRE_MINUTES)
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
