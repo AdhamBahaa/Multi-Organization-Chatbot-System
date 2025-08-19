@@ -1,70 +1,144 @@
-# Getting Started with Create React App
+# Frontend Dashboard
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A modern React dashboard with role-based access control for managing organizations, admins, and users.
 
-## Available Scripts
+## 🚀 Quick Start
 
-In the project directory, you can run:
+### Prerequisites
 
-### `npm start`
+- Node.js (version 14 or higher)
+- npm (comes with Node.js)
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+### Installation
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+1. **Navigate to the frontend directory:**
 
-### `npm test`
+   ```bash
+   cd frontend
+   ```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+2. **Install dependencies:**
 
-### `npm run build`
+   ```bash
+   npm install
+   ```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+3. **Start the development server:**
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+   ```bash
+   npm start
+   ```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+4. **Open your browser** and go to `http://localhost:3000`
 
-### `npm run eject`
+## 🔐 Login Credentials
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+### Super Admin (Default)
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+- **Email:** `superadmin@system.com`
+- **Password:** `superadmin123`
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+## 🎯 Features
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+### Super Admin Dashboard
 
-## Learn More
+- ✅ Create, read, update, delete organizations
+- ✅ Create, read, update, delete admins
+- ✅ View statistics
+- ✅ Assign admins to organizations
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+### Admin Dashboard
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+- ✅ Create, read, update, delete users
+- ✅ View organization information
+- ✅ Users automatically assigned to admin's organization
 
-### Code Splitting
+### User Dashboard
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+- ✅ View profile information
+- ✅ See organization details
+- ✅ See admin information
 
-### Analyzing the Bundle Size
+## 🏗️ Project Structure
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+```
+frontend/
+├── src/
+│   ├── components/          # Reusable UI components
+│   │   ├── OrganizationManager.js
+│   │   ├── AdminManager.js
+│   │   ├── UserManager.js
+│   │   ├── UserProfile.js
+│   │   └── OrganizationInfo.js
+│   ├── dashboards/          # Role-specific dashboards
+│   │   ├── SuperAdminDashboard.js
+│   │   ├── AdminDashboard.js
+│   │   └── UserDashboard.js
+│   ├── api.js              # API functions
+│   ├── App.js              # Main app component
+│   ├── Dashboard.js        # Dashboard router
+│   ├── Login.js            # Login component
+│   └── index.js            # App entry point
+├── package.json            # Dependencies and scripts
+└── README.md              # This file
+```
 
-### Making a Progressive Web App
+## 🔧 Available Scripts
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+- `npm start` - Runs the app in development mode
+- `npm build` - Builds the app for production
+- `npm test` - Launches the test runner
+- `npm eject` - Ejects from Create React App (one-way operation)
 
-### Advanced Configuration
+## 🌐 Backend Connection
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+Make sure your backend server is running on `http://localhost:8002` before testing the dashboard functionality.
 
-### Deployment
+## 🎨 Styling
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+The dashboard uses modern CSS with:
 
-### `npm run build` fails to minify
+- Responsive design
+- Beautiful gradients
+- Card-based layouts
+- Hover effects and animations
+- Mobile-friendly interface
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+## 🔒 Security Features
+
+- Role-based access control
+- JWT token authentication
+- Secure API communication
+- Protected routes based on user roles
+
+## 📱 Responsive Design
+
+The dashboard is fully responsive and works on:
+
+- Desktop computers
+- Tablets
+- Mobile phones
+
+## 🐛 Troubleshooting
+
+If you encounter any issues:
+
+1. **Make sure all dependencies are installed:**
+
+   ```bash
+   npm install
+   ```
+
+2. **Clear npm cache if needed:**
+
+   ```bash
+   npm cache clean --force
+   ```
+
+3. **Check if the backend is running** on the correct port
+
+4. **Verify your Node.js version** is 14 or higher
+
+## 📞 Support
+
+If you need help, check the backend README for API documentation or contact the development team.

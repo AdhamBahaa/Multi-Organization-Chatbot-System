@@ -15,23 +15,60 @@ class VectorDatabase:
         self.chroma_dir = os.path.join(UPLOAD_DIR, "chroma_db")
         os.makedirs(self.chroma_dir, exist_ok=True)
         
-        # Initialize ChromaDB client
-        self.client = chromadb.PersistentClient(
-            path=self.chroma_dir,
-            settings=Settings(
-                anonymized_telemetry=False,
-                allow_reset=True
+        try:
+            # Initialize ChromaDB client
+            self.client = chromadb.PersistentClient(
+                path=self.chroma_dir,
+                settings=Settings(
+                    anonymized_telemetry=False,
+                    allow_reset=True
+                )
             )
-        )
-        
-        # Get or create collection
-        self.collection = self.client.get_or_create_collection(
-            name="documents",
-            metadata={"description": "Document embeddings for RAG chatbot"}
-        )
+            
+            # Get or create collection
+            self.collection = self.client.get_or_create_collection(
+                name="documents",
+                metadata={"description": "Document embeddings for RAG chatbot"}
+            )
+        except Exception as e:
+            print(f"❌ ChromaDB initialization error: {e}")
+            print("🔄 Attempting to reset ChromaDB...")
+            
+            # Try to reset the database
+            try:
+                import shutil
+                if os.path.exists(self.chroma_dir):
+                    shutil.rmtree(self.chroma_dir)
+                    print("🗑️ Removed old ChromaDB directory")
+                
+                os.makedirs(self.chroma_dir, exist_ok=True)
+                
+                # Reinitialize
+                self.client = chromadb.PersistentClient(
+                    path=self.chroma_dir,
+                    settings=Settings(
+                        anonymized_telemetry=False,
+                        allow_reset=True
+                    )
+                )
+                
+                self.collection = self.client.get_or_create_collection(
+                    name="documents",
+                    metadata={"description": "Document embeddings for RAG chatbot"}
+                )
+                print("✅ ChromaDB reset and reinitialized successfully")
+            except Exception as reset_error:
+                print(f"❌ ChromaDB reset failed: {reset_error}")
+                # Create a dummy collection for now
+                self.collection = None
+                self.client = None
     
     def add_document(self, doc_id: str, text: str, metadata: Dict) -> bool:
         """Add document text and metadata to vector database"""
+        if not self.collection:
+            print("⚠️ Vector database not available, skipping document addition")
+            return False
+            
         try:
             # Split text into chunks (simple sentence-based chunking)
             chunks = self._split_text_into_chunks(text)
@@ -60,6 +97,10 @@ class VectorDatabase:
     
     def search_documents(self, query: str, n_results: int = 5) -> List[Dict]:
         """Search documents using vector similarity"""
+        if not self.collection:
+            print("⚠️ Vector database not available, returning empty search results")
+            return []
+            
         try:
             # Query the collection
             results = self.collection.query(
@@ -93,6 +134,10 @@ class VectorDatabase:
     
     def delete_document(self, doc_id: str) -> bool:
         """Delete all chunks for a specific document"""
+        if not self.collection:
+            print("⚠️ Vector database not available, skipping document deletion")
+            return False
+            
         try:
             # Get all chunks for this document
             results = self.collection.get(
@@ -111,6 +156,12 @@ class VectorDatabase:
     
     def get_collection_stats(self) -> Dict:
         """Get statistics about the vector database"""
+        if not self.collection:
+            return {
+                "total_chunks": 0,
+                "status": "unavailable"
+            }
+            
         try:
             count = self.collection.count()
             return {
