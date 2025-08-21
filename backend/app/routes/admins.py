@@ -42,7 +42,8 @@ async def create_admin(
         OrganizationID=admin_data.organization_id,
         FullName=admin_data.full_name,
         Email=admin_data.email,
-        PasswordHash=None  # No password initially
+        PasswordHash=None,  # No password initially
+        isActivated=0  # Explicitly set to 0 (False) initially
     )
     db.add(admin)
     db.commit()
@@ -71,6 +72,7 @@ async def create_admin(
         organization_id=admin.OrganizationID,
         full_name=admin.FullName,
         email=admin.Email,
+        is_activated=admin.is_activated_bool,
         created_at=admin.CreatedAt,
         setup_link=setup_link
     )
@@ -88,6 +90,7 @@ async def list_admins(
             organization_id=admin.OrganizationID,
             full_name=admin.FullName,
             email=admin.Email,
+            is_activated=admin.is_activated_bool,
             created_at=admin.CreatedAt
         )
         for admin in admins
@@ -112,6 +115,7 @@ async def get_admin(
         organization_id=admin.OrganizationID,
         full_name=admin.FullName,
         email=admin.Email,
+        is_activated=admin.is_activated_bool,
         created_at=admin.CreatedAt
     )
 
@@ -151,6 +155,7 @@ async def update_admin(
         organization_id=admin.OrganizationID,
         full_name=admin.FullName,
         email=admin.Email,
+        is_activated=admin.is_activated_bool,
         created_at=admin.CreatedAt
     )
 

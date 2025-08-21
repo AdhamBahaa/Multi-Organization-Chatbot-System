@@ -79,9 +79,13 @@ async def set_password(
                 detail="Password already set for this admin"
             )
         
-        # Set password for admin
+        # Set password for admin and mark as activated
         admin.PasswordHash = AuthManager.get_password_hash(password_data.password)
+        admin.isActivated = 1  # Use integer 1 for True
         db.commit()
+        db.refresh(admin)  # Refresh the object to get updated values
+        
+
         
         # Send welcome email to admin
         try:
@@ -104,9 +108,11 @@ async def set_password(
                 detail="Password already set for this user"
             )
         
-        # Set password for user
+        # Set password for user and mark as activated
         user.PasswordHash = AuthManager.get_password_hash(password_data.password)
+        user.isActivated = 1  # Use integer 1 for True
         db.commit()
+        db.refresh(user)  # Refresh the object to get updated values
         
         # Send welcome email to user
         try:

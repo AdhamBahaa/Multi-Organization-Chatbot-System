@@ -244,8 +244,19 @@ const UserManager = ({ adminId, onStatsUpdate }) => {
                 <p>Email: {user.email}</p>
                 <p>ID: {user.user_id}</p>
                 <p>Role: {user.role}</p>
+                <p>
+                  Status:{" "}
+                  <span
+                    style={{
+                      color: user.is_activated ? "#166534" : "#dc2626",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {user.is_activated ? "✅ Activated" : "❌ Not Activated"}
+                  </span>
+                </p>
                 <p>Created: {new Date(user.created_at).toLocaleDateString()}</p>
-                {user.setup_link && (
+                {user.setup_link && !user.is_activated && (
                   <div className="setup-link-section">
                     <p className="setup-notice">
                       <strong>⚠️ New User - Password Setup Required</strong>

@@ -42,7 +42,8 @@ async def create_user(
         FullName=user_data.full_name,
         Email=user_data.email,
         PasswordHash=None,  # No password initially
-        Role=user_data.role
+        Role=user_data.role,
+        isActivated=0  # Explicitly set to 0 (False) initially
     )
     db.add(user)
     db.commit()
@@ -73,6 +74,7 @@ async def create_user(
         full_name=user.FullName,
         email=user.Email,
         role=user.Role,
+        is_activated=user.is_activated_bool,
         created_at=user.CreatedAt,
         setup_link=setup_link
     )
@@ -95,6 +97,7 @@ async def list_organization_users(
             full_name=user.FullName,
             email=user.Email,
             role=user.Role,
+            is_activated=user.is_activated_bool,
             created_at=user.CreatedAt
         )
         for user in users
@@ -124,6 +127,7 @@ async def get_user(
         full_name=user.FullName,
         email=user.Email,
         role=user.Role,
+        is_activated=user.is_activated_bool,
         created_at=user.CreatedAt
     )
 
@@ -169,6 +173,7 @@ async def update_user(
         full_name=user.FullName,
         email=user.Email,
         role=user.Role,
+        is_activated=user.is_activated_bool,
         created_at=user.CreatedAt
     )
 

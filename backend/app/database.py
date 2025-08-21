@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.sql import func
@@ -43,11 +43,23 @@ class Admin(Base):
     FullName = Column(String(255), nullable=False)
     Email = Column(String(255), unique=True, nullable=False)
     PasswordHash = Column(String(255), nullable=True)  # Can be null initially
+    isActivated = Column(Integer, default=0, nullable=False)  # Track if admin has set their password (0=False, 1=True)
     CreatedAt = Column(DateTime, default=func.getdate())
     
     # Relationships
     organization = relationship("Organization", back_populates="admins")
     users = relationship("User", back_populates="admin", cascade="all, delete-orphan")
+    
+    @property
+    def is_activated_bool(self):
+        """Convert integer/string to Python boolean"""
+        if self.isActivated is None:
+            return False
+        # Convert to integer first to handle both string and integer values
+        try:
+            return int(self.isActivated) == 1
+        except (ValueError, TypeError):
+            return False
 
 class User(Base):
     __tablename__ = "Users"
@@ -59,11 +71,23 @@ class User(Base):
     Email = Column(String(255), unique=True, nullable=False)
     PasswordHash = Column(String(255), nullable=True)  # Can be null initially
     Role = Column(String(100), nullable=False, default="Member")  # Default to 'Member'
+    isActivated = Column(Integer, default=0, nullable=False)  # Track if user has set their password (0=False, 1=True)
     CreatedAt = Column(DateTime, default=func.getdate())
     
     # Relationships
     admin = relationship("Admin", back_populates="users")
     organization = relationship("Organization", back_populates="users")
+    
+    @property
+    def is_activated_bool(self):
+        """Convert integer/string to Python boolean"""
+        if self.isActivated is None:
+            return False
+        # Convert to integer first to handle both string and integer values
+        try:
+            return int(self.isActivated) == 1
+        except (ValueError, TypeError):
+            return False
 
 # Function to create all tables
 def create_tables():

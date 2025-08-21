@@ -266,7 +266,18 @@ const AdminManager = ({ onStatsUpdate }) => {
                 <p>
                   Created: {new Date(admin.created_at).toLocaleDateString()}
                 </p>
-                {admin.setup_link && (
+                <p>
+                  Status:{" "}
+                  <span
+                    style={{
+                      color: admin.is_activated ? "#166534" : "#dc2626",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {admin.is_activated ? "✅ Activated" : "❌ Not Activated"}
+                  </span>
+                </p>
+                {admin.setup_link && !admin.is_activated && (
                   <div className="setup-link-section">
                     <p className="setup-notice">
                       <strong>⚠️ New Admin - Password Setup Required</strong>

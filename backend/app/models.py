@@ -51,6 +51,7 @@ class AdminResponse(BaseModel):
     organization_id: int
     full_name: str
     email: str
+    is_activated: bool
     created_at: datetime
     setup_link: Optional[str] = None
 
@@ -76,6 +77,7 @@ class UserResponse(BaseModel):
     full_name: str
     email: str
     role: str
+    is_activated: bool
     created_at: datetime
     setup_link: Optional[str] = None
 
