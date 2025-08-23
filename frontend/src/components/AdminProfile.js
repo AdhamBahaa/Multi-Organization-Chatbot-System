@@ -2,6 +2,65 @@ import React, { useState } from "react";
 import { changePassword } from "../api";
 import "./AdminProfile.css";
 
+// Password validation function
+const validatePasswordStrength = (password) => {
+  if (password.length < 8) {
+    return {
+      isValid: false,
+      message: "Password must be at least 8 characters long",
+    };
+  }
+
+  if (password.length > 128) {
+    return {
+      isValid: false,
+      message: "Password must be no more than 128 characters long",
+    };
+  }
+
+  if (!/[A-Z]/.test(password)) {
+    return {
+      isValid: false,
+      message: "Password must contain at least one uppercase letter (A-Z)",
+    };
+  }
+
+  if (!/[a-z]/.test(password)) {
+    return {
+      isValid: false,
+      message: "Password must contain at least one lowercase letter (a-z)",
+    };
+  }
+
+  if (!/\d/.test(password)) {
+    return {
+      isValid: false,
+      message: "Password must contain at least one number (0-9)",
+    };
+  }
+
+  // Check for special characters using a safer approach
+  const specialChars = "!@#$%^&*()_+-=[]{}|;:,.<>?";
+  const hasSpecialChar = [...specialChars].some((char) =>
+    password.includes(char)
+  );
+  if (!hasSpecialChar) {
+    return {
+      isValid: false,
+      message:
+        "Password must contain at least one special character (!@#$%^&*()_+-=[]{}|;:,.<>&gt;?)",
+    };
+  }
+
+  return { isValid: true, message: "Password meets all strength requirements" };
+};
+
+// Helper function to check if password has special characters
+const hasSpecialCharacters = (password) => {
+  const specialChars = "!@#$%^&*()_+-=[]{}|;:,.<>?";
+  return [...specialChars].some((char) => password.includes(char));
+};
+
 const AdminProfile = ({ admin, onUpdate }) => {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -22,8 +81,10 @@ const AdminProfile = ({ admin, onUpdate }) => {
       return;
     }
 
-    if (newPassword.length < 6) {
-      setError("New password must be at least 6 characters long");
+    // Strong password validation
+    const passwordValidation = validatePasswordStrength(newPassword);
+    if (!passwordValidation.isValid) {
+      setError(passwordValidation.message);
       return;
     }
 
@@ -124,6 +185,43 @@ const AdminProfile = ({ admin, onUpdate }) => {
                   required
                   placeholder="Enter new password"
                 />
+                <div className="password-requirements">
+                  <small>Password must contain:</small>
+                  <ul>
+                    <li
+                      className={newPassword.length >= 8 ? "valid" : "invalid"}
+                    >
+                      At least 8 characters
+                    </li>
+                    <li
+                      className={
+                        /[A-Z]/.test(newPassword) ? "valid" : "invalid"
+                      }
+                    >
+                      One uppercase letter (A-Z)
+                    </li>
+                    <li
+                      className={
+                        /[a-z]/.test(newPassword) ? "valid" : "invalid"
+                      }
+                    >
+                      One lowercase letter (a-z)
+                    </li>
+                    <li
+                      className={/\d/.test(newPassword) ? "valid" : "invalid"}
+                    >
+                      One number (0-9)
+                    </li>
+                    <li
+                      className={
+                        hasSpecialCharacters(newPassword) ? "valid" : "invalid"
+                      }
+                    >
+                      One special character (!@#$%^&amp;*()_+-=[]{}
+                      |;:,.&lt;&gt;?)
+                    </li>
+                  </ul>
+                </div>
               </div>
               <div className="form-group">
                 <label htmlFor="confirmPassword">Confirm New Password:</label>

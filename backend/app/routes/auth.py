@@ -4,7 +4,7 @@ Authentication and user management routes
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Union
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from ..database import get_db, Admin, User
 from ..models import LoginRequest, TokenResponse, SetPasswordRequest, UpdateProfileRequest
 from ..auth import AuthManager, get_current_user, create_user_token
@@ -167,6 +167,14 @@ async def update_profile(
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+    
+    @validator('new_password')
+    def validate_new_password(cls, v):
+        from ..utils import validate_password_strength
+        is_valid, error_message = validate_password_strength(v)
+        if not is_valid:
+            raise ValueError(error_message)
+        return v
 
 @router.post("/change-password")
 async def change_password(

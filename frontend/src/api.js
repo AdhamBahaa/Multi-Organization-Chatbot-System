@@ -10,6 +10,73 @@ const api = axios.create({
   },
 });
 
+// Helper function to extract error message from different error response formats
+const extractErrorMessage = (error, defaultMessage = "Request failed") => {
+  if (error.response?.data) {
+    const errorData = error.response.data;
+
+    // Handle FastAPI validation errors (422 status code)
+    // FastAPI format: { detail: [{ loc: [...], msg: "...", type: "..." }] }
+    if (
+      error.response.status === 422 &&
+      errorData.detail &&
+      Array.isArray(errorData.detail)
+    ) {
+      return errorData.detail
+        .map((err) => {
+          // FastAPI validation error structure: {loc: [...], msg: "...", type: "..."}
+          if (err.msg) {
+            return err.msg; // Just return the message, skip location for cleaner output
+          }
+          return err.message || err.detail || "Validation error";
+        })
+        .join(", ");
+    }
+
+    // Handle standard error format with detail as string
+    else if (errorData.detail && typeof errorData.detail === "string") {
+      return errorData.detail;
+    }
+
+    // Handle error message format
+    else if (errorData.message && typeof errorData.message === "string") {
+      return errorData.message;
+    }
+
+    // Handle direct array format (fallback)
+    else if (Array.isArray(errorData)) {
+      return errorData
+        .map((err) => {
+          if (typeof err === "string") return err;
+          return err.msg || err.message || err.detail || "Validation error";
+        })
+        .join(", ");
+    }
+
+    // Handle detail as array (fallback)
+    else if (errorData.detail && Array.isArray(errorData.detail)) {
+      return errorData.detail
+        .map((err) => {
+          if (typeof err === "string") return err;
+          return err.msg || err.message || err.detail || "Validation error";
+        })
+        .join(", ");
+    }
+
+    // Fallback: try to stringify the entire error data
+    try {
+      if (typeof errorData === "object") {
+        return JSON.stringify(errorData);
+      }
+      return String(errorData);
+    } catch (e) {
+      // Silent fallback if stringify fails
+    }
+  }
+
+  return error.message || defaultMessage;
+};
+
 // Add auth token to requests
 api.interceptors.request.use(
   (config) => {
@@ -269,11 +336,7 @@ export const setPassword = async (email, password) => {
     });
     return response.data;
   } catch (error) {
-    console.error(
-      "Set password error:",
-      error.response?.data?.detail || error.message
-    );
-    throw new Error(error.response?.data?.detail || "Failed to set password");
+    throw new Error(extractErrorMessage(error, "Failed to set password"));
   }
 };
 
@@ -285,13 +348,7 @@ export const changePassword = async (currentPassword, newPassword) => {
     });
     return response.data;
   } catch (error) {
-    console.error(
-      "Change password error:",
-      error.response?.data?.detail || error.message
-    );
-    throw new Error(
-      error.response?.data?.detail || "Failed to change password"
-    );
+    throw new Error(extractErrorMessage(error, "Failed to change password"));
   }
 };
 

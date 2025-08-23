@@ -7,8 +7,9 @@ import time
 import PyPDF2
 import docx
 from io import BytesIO
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from .config import UPLOAD_DIR, ALLOWED_FILE_TYPES
+import re
 
 # Import the persistent document store
 from .document_store import document_store
@@ -173,3 +174,52 @@ def save_file_to_disk(file_content: bytes, doc_id: str, filename: str) -> str:
     with open(file_path, "wb") as f:
         f.write(file_content)
     return file_path
+
+def validate_password_strength(password: str) -> Tuple[bool, str]:
+    """
+    Validate password strength according to strong criteria.
+    
+    Returns:
+        Tuple[bool, str]: (is_valid, error_message)
+    """
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters long"
+    
+    if len(password) > 128:
+        return False, "Password must be no more than 128 characters long"
+    
+    # Check for at least one uppercase letter
+    if not re.search(r'[A-Z]', password):
+        return False, "Password must contain at least one uppercase letter (A-Z)"
+    
+    # Check for at least one lowercase letter
+    if not re.search(r'[a-z]', password):
+        return False, "Password must contain at least one lowercase letter (a-z)"
+    
+    # Check for at least one digit
+    if not re.search(r'\d', password):
+        return False, "Password must contain at least one number (0-9)"
+    
+    # Check for at least one special character
+    special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?"
+    if not any(char in password for char in special_chars):
+        return False, "Password must contain at least one special character (!@#$%^&*()_+-=[]{}|;:,.<>&gt;?)"
+    
+    # Check for common weak patterns
+    weak_patterns = [
+        'password', '123456', 'qwerty', 'admin', 'user',
+        'letmein', 'welcome', 'monkey', 'dragon', 'master'
+    ]
+    
+    password_lower = password.lower()
+    for pattern in weak_patterns:
+        if pattern in password_lower:
+            return False, f"Password cannot contain common weak patterns like '{pattern}'"
+    
+    # Check for repeated characters (more than 3 in a row)
+    if re.search(r'(.)\1{3,}', password):
+        return False, "Password cannot contain more than 3 repeated characters in a row"
+    
+
+    
+    return True, "Password meets all strength requirements"
