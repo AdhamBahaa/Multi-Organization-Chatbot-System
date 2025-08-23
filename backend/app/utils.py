@@ -86,7 +86,7 @@ def search_documents(query: str) -> List[dict]:
     print(f"🔍 Searching for: '{query}'")
     
     # Use vector database for semantic search
-    vector_results = vector_db.search_documents(query, n_results=5)
+    vector_results = vector_db.search_documents(query, n_results=10)
     print(f"📊 Vector search returned {len(vector_results)} results")
     
     # If vector search fails or returns no results, try fallback search

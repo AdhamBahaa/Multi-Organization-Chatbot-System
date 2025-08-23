@@ -187,6 +187,28 @@ async def change_password(
     current_user.PasswordHash = AuthManager.get_password_hash(password_data.new_password)
     db.commit()
     
+    # Send email notification
+    try:
+        from ..email_service import EmailService
+        email_service = EmailService()
+        
+        # Determine role and send notification
+        if isinstance(current_user, Admin):
+            role = "admin"
+            if current_user.AdminID == 0:
+                role = "super_admin"
+        else:
+            role = "user"
+        
+        email_service.send_password_change_notification(
+            to_email=current_user.Email,
+            full_name=current_user.FullName,
+            role=role
+        )
+    except Exception as e:
+        print(f"⚠️ Failed to send password change notification: {e}")
+        # Don't fail the password change if email fails
+    
     return {"message": "Password changed successfully"}
 
 @router.get("/profile")

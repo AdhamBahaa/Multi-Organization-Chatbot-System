@@ -1,34 +1,36 @@
 import React, { useState } from "react";
 import { changePassword } from "../api";
-import "./UserProfile.css";
+import "./AdminProfile.css";
 
-const UserProfile = ({ userInfo }) => {
+const AdminProfile = ({ admin, onUpdate }) => {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
+    setError("");
+    setSuccess("");
 
+    // Validation
     if (newPassword !== confirmPassword) {
-      setMessage("New passwords do not match");
+      setError("New passwords do not match");
       return;
     }
 
     if (newPassword.length < 6) {
-      setMessage("New password must be at least 6 characters long");
+      setError("New password must be at least 6 characters long");
       return;
     }
 
     setLoading(true);
-    setMessage("");
-
     try {
       await changePassword(currentPassword, newPassword);
-      setMessage(
+      setSuccess(
         "Password changed successfully! A confirmation email has been sent to your email address."
       );
       setCurrentPassword("");
@@ -36,133 +38,111 @@ const UserProfile = ({ userInfo }) => {
       setConfirmPassword("");
       setTimeout(() => {
         setShowChangePassword(false);
-        setMessage("");
+        setSuccess("");
       }, 2000);
+
+      // Notify parent component
+      if (onUpdate) {
+        onUpdate();
+      }
     } catch (error) {
-      setMessage(error.message);
+      setError(error.message || "Failed to change password");
     } finally {
       setLoading(false);
     }
   };
 
-  const closeModal = () => {
+  const handleCancel = () => {
     setShowChangePassword(false);
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
-    setMessage("");
+    setError("");
+    setSuccess("");
   };
-  if (!userInfo) {
-    return (
-      <div className="user-profile">
-        <div className="loading">Loading profile information...</div>
-      </div>
-    );
-  }
 
   return (
-    <div className="user-profile">
-      <h2>Your Profile</h2>
+    <div className="admin-profile">
+      <div className="profile-header">
+        <h2>Admin Profile</h2>
+        <button
+          className="btn btn-primary"
+          onClick={() => setShowChangePassword(true)}
+        >
+          Change Password
+        </button>
+      </div>
 
-      <div className="profile-card">
-        <div className="profile-section">
-          <h3>Personal Information</h3>
-          <div className="profile-field">
-            <label>Full Name:</label>
-            <span>{userInfo.fullName}</span>
-          </div>
-          <div className="profile-field">
-            <label>Email:</label>
-            <span>{userInfo.email}</span>
-          </div>
-          <div className="profile-field">
-            <label>Organization Role:</label>
-            <span className="role-badge">{userInfo.role}</span>
-          </div>
+      <div className="profile-info">
+        <div className="info-row">
+          <label>Full Name:</label>
+          <span>{admin.full_name}</span>
         </div>
-
-        <div className="profile-section">
-          <h3>Account Information</h3>
-          <div className="profile-field">
-            <label>User ID:</label>
-            <span>{userInfo.id}</span>
-          </div>
-          <div className="profile-field">
-            <label>Member Since:</label>
-            <span>{userInfo.createdAt}</span>
-          </div>
+        <div className="info-row">
+          <label>Email:</label>
+          <span>{admin.email}</span>
         </div>
-
-        <div className="profile-section">
-          <h3>Actions</h3>
-          <div className="profile-actions">
-            <button
-              className="btn btn-secondary"
-              onClick={() => setShowChangePassword(true)}
-            >
-              Change Password
-            </button>
-          </div>
+        <div className="info-row">
+          <label>Role:</label>
+          <span>{admin.role === "super_admin" ? "Super Admin" : "Admin"}</span>
+        </div>
+        <div className="info-row">
+          <label>Organization ID:</label>
+          <span>{admin.organization_id}</span>
         </div>
       </div>
 
       {/* Change Password Modal */}
       {showChangePassword && (
-        <div className="modal-overlay" onClick={closeModal}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay">
+          <div className="modal">
             <div className="modal-header">
               <h3>Change Password</h3>
-              <button className="modal-close" onClick={closeModal}>
+              <button className="close-btn" onClick={handleCancel}>
                 ×
               </button>
             </div>
             <form onSubmit={handleChangePassword}>
               <div className="form-group">
-                <label>Current Password:</label>
+                <label htmlFor="currentPassword">Current Password:</label>
                 <input
                   type="password"
+                  id="currentPassword"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   required
-                  placeholder="Enter your current password"
+                  placeholder="Enter current password"
                 />
               </div>
               <div className="form-group">
-                <label>New Password:</label>
+                <label htmlFor="newPassword">New Password:</label>
                 <input
                   type="password"
+                  id="newPassword"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
-                  minLength={6}
-                  placeholder="Enter new password (min 6 characters)"
+                  placeholder="Enter new password"
                 />
               </div>
               <div className="form-group">
-                <label>Confirm New Password:</label>
+                <label htmlFor="confirmPassword">Confirm New Password:</label>
                 <input
                   type="password"
+                  id="confirmPassword"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  placeholder="Confirm your new password"
+                  placeholder="Confirm new password"
                 />
               </div>
-              {message && (
-                <div
-                  className={`message ${
-                    message.includes("successfully") ? "success" : "error"
-                  }`}
-                >
-                  {message}
-                </div>
-              )}
+              {error && <div className="error-message">{error}</div>}
+              {success && <div className="success-message">{success}</div>}
               <div className="modal-actions">
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={closeModal}
-                  disabled={loading}
+                  onClick={handleCancel}
                 >
                   Cancel
                 </button>
@@ -182,4 +162,4 @@ const UserProfile = ({ userInfo }) => {
   );
 };
 
-export default UserProfile;
+export default AdminProfile;

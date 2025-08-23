@@ -122,7 +122,7 @@ class VectorDatabase:
                         'filename': metadata.get('filename', ''),
                         'chunk': doc,
                         'chunk_index': metadata.get('chunk_index', 0),
-                        'relevance_score': 1 - distance,  # Convert distance to similarity
+                        'relevance_score': max(0, 1 - distance),  # Convert distance to similarity, ensure non-negative
                         'metadata': metadata
                     })
             
