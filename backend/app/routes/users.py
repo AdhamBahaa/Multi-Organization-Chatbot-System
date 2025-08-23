@@ -26,12 +26,21 @@ async def create_user(
             detail="Can only create users under your own admin account"
         )
     
-    # Check if email already exists
-    existing_email = db.query(User).filter(User.Email == user_data.email).first()
-    if existing_email:
+    # Check if email already exists in User table
+    existing_user = db.query(User).filter(User.Email == user_data.email).first()
+    if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            detail="Email is already registered"
+        )
+    
+    # Check if email already exists in Admin table
+    from ..database import Admin
+    existing_admin = db.query(Admin).filter(Admin.Email == user_data.email).first()
+    if existing_admin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email is already registered"
         )
     
     # Create user without password (will be set by user later)
@@ -150,14 +159,23 @@ async def update_user(
         )
     
     # Check if email is already taken by another user
-    existing_email = db.query(User).filter(
+    existing_user = db.query(User).filter(
         User.Email == user_data.email,
         User.UserID != user_id
     ).first()
-    if existing_email:
+    if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already taken by another user"
+            detail="Email is already registered"
+        )
+    
+    # Check if email is already taken by an admin
+    from ..database import Admin
+    existing_admin = db.query(Admin).filter(Admin.Email == user_data.email).first()
+    if existing_admin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email is already registered"
         )
     
     user.FullName = user_data.full_name

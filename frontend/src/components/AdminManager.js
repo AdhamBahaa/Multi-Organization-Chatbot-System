@@ -13,6 +13,8 @@ const AdminManager = ({ onStatsUpdate }) => {
   const [organizations, setOrganizations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [createFormError, setCreateFormError] = useState("");
+  const [editFormError, setEditFormError] = useState("");
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState(null);
   const [formData, setFormData] = useState({
@@ -48,6 +50,7 @@ const AdminManager = ({ onStatsUpdate }) => {
 
   const handleCreate = async (e) => {
     e.preventDefault();
+    setCreateFormError("");
     try {
       await createAdmin(
         parseInt(formData.organization_id),
@@ -58,12 +61,13 @@ const AdminManager = ({ onStatsUpdate }) => {
       setShowCreateForm(false);
       await loadData();
     } catch (err) {
-      setError(err.message);
+      setCreateFormError(err.message);
     }
   };
 
   const handleUpdate = async (e) => {
     e.preventDefault();
+    setEditFormError("");
     try {
       await updateAdmin(
         editingAdmin.admin_id,
@@ -74,7 +78,7 @@ const AdminManager = ({ onStatsUpdate }) => {
       setEditingAdmin(null);
       await loadData();
     } catch (err) {
-      setError(err.message);
+      setEditFormError(err.message);
     }
   };
 
@@ -104,6 +108,7 @@ const AdminManager = ({ onStatsUpdate }) => {
 
   const cancelEdit = () => {
     setEditingAdmin(null);
+    setEditFormError("");
     setFormData({ organization_id: "", full_name: "", email: "" });
   };
 
@@ -183,6 +188,11 @@ const AdminManager = ({ onStatsUpdate }) => {
                   placeholder="Enter email"
                 />
               </div>
+              {createFormError && (
+                <div className="error-message" style={{ marginBottom: "1rem" }}>
+                  {createFormError}
+                </div>
+              )}
               <div className="form-actions">
                 <button type="submit" className="btn btn-primary">
                   Create
@@ -190,7 +200,10 @@ const AdminManager = ({ onStatsUpdate }) => {
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => setShowCreateForm(false)}
+                  onClick={() => {
+                    setShowCreateForm(false);
+                    setCreateFormError("");
+                  }}
                 >
                   Cancel
                 </button>
@@ -230,6 +243,11 @@ const AdminManager = ({ onStatsUpdate }) => {
                   placeholder="Enter email"
                 />
               </div>
+              {editFormError && (
+                <div className="error-message" style={{ marginBottom: "1rem" }}>
+                  {editFormError}
+                </div>
+              )}
               <div className="form-actions">
                 <button type="submit" className="btn btn-primary">
                   Update

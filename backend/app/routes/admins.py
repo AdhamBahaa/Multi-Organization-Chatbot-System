@@ -29,12 +29,21 @@ async def create_admin(
             detail="Organization not found"
         )
     
-    # Check if email already exists
-    existing_email = db.query(Admin).filter(Admin.Email == admin_data.email).first()
-    if existing_email:
+    # Check if email already exists in Admin table
+    existing_admin = db.query(Admin).filter(Admin.Email == admin_data.email).first()
+    if existing_admin:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            detail="Email is already registered"
+        )
+    
+    # Check if email already exists in User table
+    from ..database import User
+    existing_user = db.query(User).filter(User.Email == admin_data.email).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email is already registered"
         )
     
     # Create admin without password (will be set by admin later)
@@ -135,14 +144,23 @@ async def update_admin(
         )
     
     # Check if email is already taken by another admin
-    existing_email = db.query(Admin).filter(
+    existing_admin = db.query(Admin).filter(
         Admin.Email == admin_data.email,
         Admin.AdminID != admin_id
     ).first()
-    if existing_email:
+    if existing_admin:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already taken by another admin"
+            detail="Email is already registered"
+        )
+    
+    # Check if email is already taken by a user
+    from ..database import User
+    existing_user = db.query(User).filter(User.Email == admin_data.email).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email is already registered"
         )
     
     admin.FullName = admin_data.full_name

@@ -139,23 +139,45 @@ async def update_profile(
 ):
     """Update user profile (name and email)"""
     
-    # Check if email is already taken by another user
+    # Check if email is already taken by another user (cross-table validation)
     if isinstance(current_user, Admin):
-        existing_email = db.query(Admin).filter(
+        # Check if email exists in Admin table (excluding current admin)
+        existing_admin = db.query(Admin).filter(
             Admin.Email == profile_data.email,
             Admin.AdminID != current_user.AdminID
         ).first()
+        if existing_admin:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email is already registered"
+            )
+        
+        # Check if email exists in User table
+        existing_user = db.query(User).filter(User.Email == profile_data.email).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email is already registered"
+            )
     else:
-        existing_email = db.query(User).filter(
+        # Check if email exists in User table (excluding current user)
+        existing_user = db.query(User).filter(
             User.Email == profile_data.email,
             User.UserID != current_user.UserID
         ).first()
-    
-    if existing_email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already taken by another user"
-        )
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email is already registered"
+            )
+        
+        # Check if email exists in Admin table
+        existing_admin = db.query(Admin).filter(Admin.Email == profile_data.email).first()
+        if existing_admin:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email is already registered"
+            )
     
     # Update profile
     current_user.FullName = profile_data.full_name
