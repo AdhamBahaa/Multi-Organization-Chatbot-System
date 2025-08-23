@@ -80,20 +80,20 @@ def extract_text_from_file(file_content: bytes, content_type: str, filename: str
         print(f"❌ Text extraction error: {e}")
         return f"File uploaded: {filename}. Content extraction failed: {str(e)}"
 
-def search_documents(query: str) -> List[dict]:
+def search_documents(query: str, organization_id: int = None) -> List[dict]:
     """Search documents using ChromaDB vector similarity with fallback"""
     from .vector_db import vector_db
     
-    print(f"🔍 Searching for: '{query}'")
+    print(f"🔍 Searching for: '{query}' in organization {organization_id}")
     
     # Use vector database for semantic search
-    vector_results = vector_db.search_documents(query, n_results=10)
+    vector_results = vector_db.search_documents(query, n_results=10, organization_id=organization_id)
     print(f"📊 Vector search returned {len(vector_results)} results")
     
     # If vector search fails or returns no results, try fallback search
     if not vector_results:
         print("⚠️ Vector search failed, trying fallback search...")
-        return fallback_search_documents(query)
+        return fallback_search_documents(query, organization_id)
     
     # Group results by document
     document_results = {}
@@ -117,13 +117,17 @@ def search_documents(query: str) -> List[dict]:
     print(f"📄 Found {len(results)} documents with relevant content")
     return results
 
-def fallback_search_documents(query: str) -> List[dict]:
+def fallback_search_documents(query: str, organization_id: int = None) -> List[dict]:
     """Fallback search using simple text matching"""
     print("🔄 Using fallback search...")
     
-    # Get all documents from document store
-    all_documents = document_store.get_all_documents()
-    print(f"📚 Total documents in store: {len(all_documents)}")
+    # Get documents from document store (filtered by organization if specified)
+    if organization_id is not None:
+        all_documents = document_store.get_documents_by_organization(organization_id)
+        print(f"📚 Total documents in organization {organization_id}: {len(all_documents)}")
+    else:
+        all_documents = document_store.get_all_documents()
+        print(f"📚 Total documents in store: {len(all_documents)}")
     
     results = []
     query_lower = query.lower()

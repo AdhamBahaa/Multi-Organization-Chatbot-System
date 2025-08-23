@@ -25,6 +25,11 @@ class DocumentStore:
                 valid_documents = {}
                 for doc_id, doc_data in self.documents.items():
                     if os.path.exists(doc_data.get('file_path', '')):
+                        # Handle legacy documents without organization_id
+                        if 'organization_id' not in doc_data:
+                            print(f"⚠️  Legacy document found: {doc_data.get('filename', 'Unknown')} - assigning to organization 1")
+                            doc_data['organization_id'] = 1  # Default to organization 1 for legacy documents
+                        
                         valid_documents[doc_id] = doc_data
                     else:
                         print(f"⚠️  Document file not found, removing from registry: {doc_data.get('filename', 'Unknown')}")
@@ -67,6 +72,13 @@ class DocumentStore:
     def get_all_documents(self) -> List[dict]:
         """Get all documents"""
         return list(self.documents.values())
+    
+    def get_documents_by_organization(self, organization_id: int) -> List[dict]:
+        """Get documents for a specific organization"""
+        return [
+            doc for doc in self.documents.values() 
+            if doc.get('organization_id') == organization_id
+        ]
     
     def document_exists(self, doc_id: str) -> bool:
         """Check if a document exists"""

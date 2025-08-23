@@ -95,19 +95,27 @@ class VectorDatabase:
             print(f"Error adding document to vector DB: {e}")
             return False
     
-    def search_documents(self, query: str, n_results: int = 5) -> List[Dict]:
+    def search_documents(self, query: str, n_results: int = 5, organization_id: int = None) -> List[Dict]:
         """Search documents using vector similarity"""
         if not self.collection:
             print("⚠️ Vector database not available, returning empty search results")
             return []
             
         try:
+            # Build query parameters
+            query_params = {
+                "query_texts": [query],
+                "n_results": n_results,
+                "include": ["documents", "metadatas", "distances"]
+            }
+            
+            # Add organization filter if specified
+            if organization_id is not None:
+                query_params["where"] = {"organization_id": organization_id}
+                print(f"🔍 Filtering search to organization {organization_id}")
+            
             # Query the collection
-            results = self.collection.query(
-                query_texts=[query],
-                n_results=n_results,
-                include=["documents", "metadatas", "distances"]
-            )
+            results = self.collection.query(**query_params)
             
             # Process results
             search_results = []

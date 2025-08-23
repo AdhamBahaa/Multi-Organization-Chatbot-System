@@ -11,13 +11,13 @@ def configure_gemini():
     if API_KEY:
         genai.configure(api_key=API_KEY)
 
-async def generate_chat_response(chat_data: ChatRequest) -> ChatResponse:
+async def generate_chat_response(chat_data: ChatRequest, organization_id: int = None) -> ChatResponse:
     """Generate AI-powered response with RAG functionality"""
     
-    print(f"🤖 Generating response for: '{chat_data.message}'")
+    print(f"🤖 Generating response for: '{chat_data.message}' in organization {organization_id}")
     
-    # Search through uploaded documents
-    search_results = search_documents(chat_data.message)
+    # Search through uploaded documents (filtered by organization)
+    search_results = search_documents(chat_data.message, organization_id)
     print(f"📋 Search returned {len(search_results)} document results")
     
     # Debug: Print search results for troubleshooting

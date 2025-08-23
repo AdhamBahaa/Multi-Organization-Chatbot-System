@@ -17,7 +17,11 @@ async def get_all_documents():
     """Get all uploaded documents"""
     return document_store.get_all_documents()
 
-async def upload_document(file: UploadFile = File(...)):
+async def get_documents_by_organization(organization_id: int):
+    """Get documents for a specific organization"""
+    return document_store.get_documents_by_organization(organization_id)
+
+async def upload_document(file: UploadFile = File(...), organization_id: int = None):
     """Upload and process a document"""
     try:
         # Validate file type
@@ -51,7 +55,8 @@ async def upload_document(file: UploadFile = File(...)):
             "chunk_count": max(1, len(extracted_text) // 1000),  # Rough estimate
             "content_preview": extracted_text[:200] if extracted_text else f"Uploaded {file.content_type} file",
             "extracted_text": extracted_text,  # Store full extracted text for search
-            "uploaded_at": time.time()
+            "uploaded_at": time.time(),
+            "organization_id": organization_id  # Add organization ID
         }
         
         # Add to persistent document store
@@ -65,7 +70,8 @@ async def upload_document(file: UploadFile = File(...)):
                 "filename": file.filename,
                 "file_type": file.content_type,
                 "file_size": len(content),
-                "uploaded_at": time.time()
+                "uploaded_at": time.time(),
+                "organization_id": organization_id  # Add organization ID to vector metadata
             }
             vector_db.add_document(doc_id, extracted_text, vector_metadata)
         
@@ -112,3 +118,12 @@ async def get_system_stats() -> SystemStatsResponse:
         vector_db_status=vector_stats["status"],
         ai_configured=bool(API_KEY)
     )
+
+async def get_organization_stats(organization_id: int) -> dict:
+    """Get statistics for a specific organization"""
+    org_docs = document_store.get_documents_by_organization(organization_id)
+    
+    return {
+        "total_documents": len(org_docs),
+        "organization_id": organization_id
+    }
