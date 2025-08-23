@@ -11,7 +11,7 @@ from .utils import (
     save_file_to_disk
 )
 from .document_store import document_store
-from .config import ALLOWED_FILE_TYPES, API_KEY
+from .config import ALLOWED_FILE_TYPES, BLOCKED_FILE_TYPES, API_KEY
 
 async def get_all_documents():
     """Get all uploaded documents"""
