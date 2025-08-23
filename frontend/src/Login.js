@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { login } from "./api";
 import "./Login.css";
@@ -8,7 +8,20 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [logoutReason, setLogoutReason] = useState("");
   const navigate = useNavigate();
+
+  // Check for logout reason on component mount
+  useEffect(() => {
+    const reason = localStorage.getItem("logoutReason");
+    if (reason === "session_expired") {
+      setLogoutReason(
+        "🔒 Your session has expired after 2 minutes of inactivity. Please log in again to continue."
+      );
+      // Clear the reason after displaying it
+      localStorage.removeItem("logoutReason");
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -42,6 +55,7 @@ const Login = () => {
           <p>Sign in to your account</p>
         </div>
 
+        {logoutReason && <div className="logout-message">{logoutReason}</div>}
         {error && <div className="error-message">{error}</div>}
 
         <form onSubmit={handleSubmit} className="login-form">

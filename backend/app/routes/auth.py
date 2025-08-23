@@ -285,6 +285,35 @@ async def get_my_admin(
         "created_at": admin.CreatedAt
     }
 
+@router.post("/refresh-session")
+async def refresh_session(
+    current_user: Union[Admin, User] = Depends(get_current_user)
+):
+    """Refresh user session by extending token expiry"""
+    try:
+        # Determine role based on user type
+        if isinstance(current_user, Admin):
+            if current_user.AdminID == 0:
+                role = "super_admin"
+            else:
+                role = "admin"
+        else:
+            role = "user"
+        
+        # Create new token with extended expiry
+        token_response = create_user_token(current_user, role)
+        
+        return {
+            "success": True,
+            "access_token": token_response.access_token,
+            "message": "Session refreshed successfully"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to refresh session"
+        )
+
 @router.post("/logout")
 async def logout():
     """Logout endpoint (client-side token removal)"""

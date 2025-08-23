@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import UserManager from "../components/UserManager";
 import OrganizationInfo from "../components/OrganizationInfo";
 import AdminProfile from "../components/AdminProfile";
@@ -49,6 +49,11 @@ const AdminDashboard = ({ user, onLogout }) => {
       console.error("Error loading stats:", error);
     }
   };
+
+  // Memoize callback function to prevent infinite re-renders
+  const handleUsersStatsUpdate = useCallback((count) => {
+    setStats((prev) => ({ ...prev, totalUsers: count }));
+  }, []);
 
   return (
     <div className="admin-dashboard">
@@ -127,9 +132,7 @@ const AdminDashboard = ({ user, onLogout }) => {
         {activeTab === "users" && (
           <UserManager
             adminId={user.id}
-            onStatsUpdate={(count) =>
-              setStats((prev) => ({ ...prev, totalUsers: count }))
-            }
+            onStatsUpdate={handleUsersStatsUpdate}
           />
         )}
         {activeTab === "chatbot" && <Chat />}
