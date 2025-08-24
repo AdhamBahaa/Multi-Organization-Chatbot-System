@@ -575,6 +575,246 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
+/* Voice Input Styles */
+.voice-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.language-selector {
+  padding: 8px 12px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  background: white;
+  font-size: 14px;
+  font-weight: 500;
+  color: #4a5568;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 140px;
+}
+
+.language-selector:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.language-selector:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #f7fafc;
+}
+
+.voice-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 12px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  height: 48px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.voice-button:hover:not(:disabled) {
+  background-color: rgba(79, 70, 229, 0.1);
+  transform: scale(1.05);
+}
+
+.voice-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.voice-button.recording {
+  background-color: #ef4444;
+  animation: pulse 1.5s infinite;
+}
+
+.voice-button.recording .voice-icon {
+  color: white;
+}
+
+.voice-icon {
+  font-size: 18px;
+  transition: all 0.3s ease;
+}
+
+.voice-icon.recording {
+  animation: bounce 0.6s infinite;
+}
+
+/* Silence Indicator */
+.silence-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+  animation: pulse 2s infinite;
+}
+
+.silence-icon {
+  font-size: 14px;
+}
+
+.silence-text {
+  white-space: nowrap;
+}
+
+/* Language Switching Indicator */
+.language-switching-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: white;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  animation: spin 1s linear infinite;
+}
+
+.switching-icon {
+  font-size: 14px;
+}
+
+.switching-text {
+  white-space: nowrap;
+}
+
+/* Voice Transcript Display */
+.voice-transcript {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  z-index: 10;
+  animation: slideDown 0.3s ease;
+}
+
+.transcript-label {
+  font-size: 16px;
+}
+
+.transcript-text {
+  flex: 1;
+  font-weight: 500;
+}
+
+.language-indicator {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Voice Button Animations */
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes bounce {
+  0%,
+  20%,
+  50%,
+  80%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-3px);
+  }
+  60% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Browser Compatibility Message */
+.voice-compatibility-message {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background-color: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #6b7280;
+  margin-right: 8px;
+}
+
+.compatibility-icon {
+  font-size: 14px;
+}
+
+.compatibility-text {
+  white-space: nowrap;
+}
+
+/* Responsive Voice Input */
+@media (max-width: 768px) {
+  .voice-button {
+    min-width: 36px;
+    height: 36px;
+    padding: 6px;
+  }
+
+  .voice-icon {
+    font-size: 16px;
+  }
+
+  .voice-transcript {
+    font-size: 13px;
+    padding: 6px 10px;
+  }
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .chat-container {
