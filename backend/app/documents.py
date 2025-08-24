@@ -11,13 +11,17 @@ from .utils import (
     save_file_to_disk
 )
 from .document_store import document_store
-from .config import ALLOWED_FILE_TYPES, API_KEY
+from .config import ALLOWED_FILE_TYPES, BLOCKED_FILE_TYPES, API_KEY
 
 async def get_all_documents():
     """Get all uploaded documents"""
     return document_store.get_all_documents()
 
-async def upload_document(file: UploadFile = File(...)):
+async def get_documents_by_organization(organization_id: int):
+    """Get documents for a specific organization"""
+    return document_store.get_documents_by_organization(organization_id)
+
+async def upload_document(file: UploadFile = File(...), organization_id: int = None):
     """Upload and process a document"""
     try:
         # Validate file type
@@ -51,7 +55,8 @@ async def upload_document(file: UploadFile = File(...)):
             "chunk_count": max(1, len(extracted_text) // 1000),  # Rough estimate
             "content_preview": extracted_text[:200] if extracted_text else f"Uploaded {file.content_type} file",
             "extracted_text": extracted_text,  # Store full extracted text for search
-            "uploaded_at": time.time()
+            "uploaded_at": time.time(),
+            "organization_id": organization_id  # Add organization ID
         }
         
         # Add to persistent document store
@@ -65,7 +70,8 @@ async def upload_document(file: UploadFile = File(...)):
                 "filename": file.filename,
                 "file_type": file.content_type,
                 "file_size": len(content),
-                "uploaded_at": time.time()
+                "uploaded_at": time.time(),
+                "organization_id": organization_id  # Add organization ID to vector metadata
             }
             vector_db.add_document(doc_id, extracted_text, vector_metadata)
         
@@ -112,3 +118,30 @@ async def get_system_stats() -> SystemStatsResponse:
         vector_db_status=vector_stats["status"],
         ai_configured=bool(API_KEY)
     )
+
+async def get_organization_stats(organization_id: int) -> dict:
+    """Get statistics for a specific organization"""
+    org_docs = document_store.get_documents_by_organization(organization_id)
+    
+    # Debug: Print document details for this organization
+    print(f"🔍 Organization {organization_id} stats:")
+    print(f"   Total documents found: {len(org_docs)}")
+    for i, doc in enumerate(org_docs):
+        print(f"   Document {i+1}: {doc.get('filename', 'Unknown')} (ID: {doc.get('id', 'Unknown')})")
+    
+    # Return detailed information including document list
+    return {
+        "total_documents": len(org_docs),
+        "organization_id": organization_id,
+        "documents": [
+            {
+                "id": doc.get("id"),
+                "filename": doc.get("filename"),
+                "organization_id": doc.get("organization_id"),
+                "has_extracted_text": bool(doc.get("extracted_text")),
+                "text_length": len(doc.get("extracted_text", "")),
+                "chunk_count": doc.get("chunk_count", 0)
+            }
+            for doc in org_docs
+        ]
+    }

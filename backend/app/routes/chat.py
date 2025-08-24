@@ -19,7 +19,13 @@ async def chat_endpoint(
 ):
     """Chat endpoint for AI-powered responses with RAG functionality"""
     try:
-        response = await generate_chat_response(chat_data)
+        # Get organization ID from current user
+        if isinstance(current_user, Admin):
+            organization_id = current_user.OrganizationID
+        else:  # User
+            organization_id = current_user.OrganizationID
+        
+        response = await generate_chat_response(chat_data, organization_id)
         return response
     except Exception as e:
         raise HTTPException(

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { changePassword } from "../api";
-import "./UserProfile.css";
+import "./AdminProfile.css";
 
 // Password validation function
 const validatePasswordStrength = (password) => {
@@ -61,34 +61,37 @@ const hasSpecialCharacters = (password) => {
   return [...specialChars].some((char) => password.includes(char));
 };
 
-const UserProfile = ({ userInfo }) => {
+const AdminProfile = ({ admin, onUpdate }) => {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
+    setError("");
+    setSuccess("");
 
+    // Validation
     if (newPassword !== confirmPassword) {
-      setMessage("New passwords do not match");
+      setError("New passwords do not match");
       return;
     }
 
     // Strong password validation
     const passwordValidation = validatePasswordStrength(newPassword);
     if (!passwordValidation.isValid) {
-      setMessage(passwordValidation.message);
+      setError(passwordValidation.message);
       return;
     }
 
     setLoading(true);
-
     try {
       await changePassword(currentPassword, newPassword);
-      setMessage(
+      setSuccess(
         "Password changed successfully! A confirmation email has been sent to your email address."
       );
       setCurrentPassword("");
@@ -96,10 +99,15 @@ const UserProfile = ({ userInfo }) => {
       setConfirmPassword("");
       setTimeout(() => {
         setShowChangePassword(false);
-        setMessage("");
+        setSuccess("");
       }, 2000);
+
+      // Notify parent component
+      if (onUpdate) {
+        onUpdate();
+      }
     } catch (error) {
-      setMessage(error.message || "Failed to change password");
+      setError(error.message || "Failed to change password");
     } finally {
       setLoading(false);
     }
@@ -110,13 +118,14 @@ const UserProfile = ({ userInfo }) => {
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
-    setMessage("");
+    setError("");
+    setSuccess("");
   };
 
   return (
-    <div className="user-profile">
+    <div className="admin-profile">
       <div className="profile-header">
-        <h2>User Profile</h2>
+        <h2>Admin Profile</h2>
         <button
           className="btn btn-primary"
           onClick={() => setShowChangePassword(true)}
@@ -128,19 +137,19 @@ const UserProfile = ({ userInfo }) => {
       <div className="profile-info">
         <div className="info-row">
           <label>Full Name:</label>
-          <span>{userInfo.full_name}</span>
+          <span>{admin.full_name}</span>
         </div>
         <div className="info-row">
           <label>Email:</label>
-          <span>{userInfo.email}</span>
+          <span>{admin.email}</span>
         </div>
         <div className="info-row">
           <label>Role:</label>
-          <span>User</span>
+          <span>{admin.role === "super_admin" ? "Super Admin" : "Admin"}</span>
         </div>
         <div className="info-row">
           <label>Organization ID:</label>
-          <span>{userInfo.organization_id}</span>
+          <span>{admin.organization_id}</span>
         </div>
       </div>
 
@@ -156,9 +165,10 @@ const UserProfile = ({ userInfo }) => {
             </div>
             <form onSubmit={handleChangePassword}>
               <div className="form-group">
-                <label>Current Password:</label>
+                <label htmlFor="currentPassword">Current Password:</label>
                 <input
                   type="password"
+                  id="currentPassword"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   required
@@ -166,9 +176,10 @@ const UserProfile = ({ userInfo }) => {
                 />
               </div>
               <div className="form-group">
-                <label>New Password:</label>
+                <label htmlFor="newPassword">New Password:</label>
                 <input
                   type="password"
+                  id="newPassword"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
@@ -213,26 +224,18 @@ const UserProfile = ({ userInfo }) => {
                 </div>
               </div>
               <div className="form-group">
-                <label>Confirm New Password:</label>
+                <label htmlFor="confirmPassword">Confirm New Password:</label>
                 <input
                   type="password"
+                  id="confirmPassword"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
                   placeholder="Confirm new password"
                 />
               </div>
-              {message && (
-                <div
-                  className={
-                    message.includes("successfully")
-                      ? "success-message"
-                      : "error-message"
-                  }
-                >
-                  {message}
-                </div>
-              )}
+              {error && <div className="error-message">{error}</div>}
+              {success && <div className="success-message">{success}</div>}
               <div className="modal-actions">
                 <button
                   type="button"
@@ -257,4 +260,4 @@ const UserProfile = ({ userInfo }) => {
   );
 };
 
-export default UserProfile;
+export default AdminProfile;

@@ -1,7 +1,7 @@
 """
 Pydantic models for the RAG Chatbot Backend
 """
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, validator
 from typing import Optional, List
 from datetime import datetime
 
@@ -51,6 +51,7 @@ class AdminResponse(BaseModel):
     organization_id: int
     full_name: str
     email: str
+    is_activated: bool
     created_at: datetime
     setup_link: Optional[str] = None
 
@@ -76,6 +77,7 @@ class UserResponse(BaseModel):
     full_name: str
     email: str
     role: str
+    is_activated: bool
     created_at: datetime
     setup_link: Optional[str] = None
 
@@ -86,6 +88,14 @@ class UserResponse(BaseModel):
 class SetPasswordRequest(BaseModel):
     email: str
     password: str
+    
+    @validator('password')
+    def validate_password(cls, v):
+        from .utils import validate_password_strength
+        is_valid, error_message = validate_password_strength(v)
+        if not is_valid:
+            raise ValueError(error_message)
+        return v
 
 class UpdateProfileRequest(BaseModel):
     full_name: str

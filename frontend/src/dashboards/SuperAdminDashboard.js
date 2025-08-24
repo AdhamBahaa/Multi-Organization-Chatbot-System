@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import OrganizationManager from "../components/OrganizationManager";
 import AdminManager from "../components/AdminManager";
 import "./SuperAdminDashboard.css";
@@ -26,6 +26,15 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
       console.error("Error loading stats:", error);
     }
   };
+
+  // Memoize callback functions to prevent infinite re-renders
+  const handleOrganizationsStatsUpdate = useCallback((count) => {
+    setStats((prev) => ({ ...prev, totalOrganizations: count }));
+  }, []);
+
+  const handleAdminsStatsUpdate = useCallback((count) => {
+    setStats((prev) => ({ ...prev, totalAdmins: count }));
+  }, []);
 
   return (
     <div className="super-admin-dashboard">
@@ -79,18 +88,10 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
       {/* Content Area */}
       <div className="dashboard-content">
         {activeTab === "organizations" && (
-          <OrganizationManager
-            onStatsUpdate={(count) =>
-              setStats((prev) => ({ ...prev, totalOrganizations: count }))
-            }
-          />
+          <OrganizationManager onStatsUpdate={handleOrganizationsStatsUpdate} />
         )}
         {activeTab === "admins" && (
-          <AdminManager
-            onStatsUpdate={(count) =>
-              setStats((prev) => ({ ...prev, totalAdmins: count }))
-            }
-          />
+          <AdminManager onStatsUpdate={handleAdminsStatsUpdate} />
         )}
       </div>
     </div>

@@ -26,12 +26,21 @@ async def create_user(
             detail="Can only create users under your own admin account"
         )
     
-    # Check if email already exists
-    existing_email = db.query(User).filter(User.Email == user_data.email).first()
-    if existing_email:
+    # Check if email already exists in User table
+    existing_user = db.query(User).filter(User.Email == user_data.email).first()
+    if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            detail="Email is already registered"
+        )
+    
+    # Check if email already exists in Admin table
+    from ..database import Admin
+    existing_admin = db.query(Admin).filter(Admin.Email == user_data.email).first()
+    if existing_admin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email is already registered"
         )
     
     # Create user without password (will be set by user later)
@@ -42,7 +51,8 @@ async def create_user(
         FullName=user_data.full_name,
         Email=user_data.email,
         PasswordHash=None,  # No password initially
-        Role=user_data.role
+        Role=user_data.role,
+        isActivated=0  # Explicitly set to 0 (False) initially
     )
     db.add(user)
     db.commit()
@@ -73,6 +83,7 @@ async def create_user(
         full_name=user.FullName,
         email=user.Email,
         role=user.Role,
+        is_activated=user.is_activated_bool,
         created_at=user.CreatedAt,
         setup_link=setup_link
     )
@@ -95,6 +106,7 @@ async def list_organization_users(
             full_name=user.FullName,
             email=user.Email,
             role=user.Role,
+            is_activated=user.is_activated_bool,
             created_at=user.CreatedAt
         )
         for user in users
@@ -124,6 +136,7 @@ async def get_user(
         full_name=user.FullName,
         email=user.Email,
         role=user.Role,
+        is_activated=user.is_activated_bool,
         created_at=user.CreatedAt
     )
 
@@ -146,14 +159,23 @@ async def update_user(
         )
     
     # Check if email is already taken by another user
-    existing_email = db.query(User).filter(
+    existing_user = db.query(User).filter(
         User.Email == user_data.email,
         User.UserID != user_id
     ).first()
-    if existing_email:
+    if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already taken by another user"
+            detail="Email is already registered"
+        )
+    
+    # Check if email is already taken by an admin
+    from ..database import Admin
+    existing_admin = db.query(Admin).filter(Admin.Email == user_data.email).first()
+    if existing_admin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email is already registered"
         )
     
     user.FullName = user_data.full_name
@@ -169,6 +191,7 @@ async def update_user(
         full_name=user.FullName,
         email=user.Email,
         role=user.Role,
+        is_activated=user.is_activated_bool,
         created_at=user.CreatedAt
     )
 

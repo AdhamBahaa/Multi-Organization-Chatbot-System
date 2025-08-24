@@ -10,6 +10,73 @@ const api = axios.create({
   },
 });
 
+// Helper function to extract error message from different error response formats
+const extractErrorMessage = (error, defaultMessage = "Request failed") => {
+  if (error.response?.data) {
+    const errorData = error.response.data;
+
+    // Handle FastAPI validation errors (422 status code)
+    // FastAPI format: { detail: [{ loc: [...], msg: "...", type: "..." }] }
+    if (
+      error.response.status === 422 &&
+      errorData.detail &&
+      Array.isArray(errorData.detail)
+    ) {
+      return errorData.detail
+        .map((err) => {
+          // FastAPI validation error structure: {loc: [...], msg: "...", type: "..."}
+          if (err.msg) {
+            return err.msg; // Just return the message, skip location for cleaner output
+          }
+          return err.message || err.detail || "Validation error";
+        })
+        .join(", ");
+    }
+
+    // Handle standard error format with detail as string
+    else if (errorData.detail && typeof errorData.detail === "string") {
+      return errorData.detail;
+    }
+
+    // Handle error message format
+    else if (errorData.message && typeof errorData.message === "string") {
+      return errorData.message;
+    }
+
+    // Handle direct array format (fallback)
+    else if (Array.isArray(errorData)) {
+      return errorData
+        .map((err) => {
+          if (typeof err === "string") return err;
+          return err.msg || err.message || err.detail || "Validation error";
+        })
+        .join(", ");
+    }
+
+    // Handle detail as array (fallback)
+    else if (errorData.detail && Array.isArray(errorData.detail)) {
+      return errorData.detail
+        .map((err) => {
+          if (typeof err === "string") return err;
+          return err.msg || err.message || err.detail || "Validation error";
+        })
+        .join(", ");
+    }
+
+    // Fallback: try to stringify the entire error data
+    try {
+      if (typeof errorData === "object") {
+        return JSON.stringify(errorData);
+      }
+      return String(errorData);
+    } catch (e) {
+      // Silent fallback if stringify fails
+    }
+  }
+
+  return error.message || defaultMessage;
+};
+
 // Add auth token to requests
 api.interceptors.request.use(
   (config) => {
@@ -28,14 +95,156 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Don't auto-logout on refresh-session endpoint failures
+    // This prevents the vicious cycle of refresh failing -> logout -> refresh failing
+    if (error.config?.url?.includes("/auth/refresh-session")) {
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401 || error.response?.status === 403) {
+      // Remove session refresh listeners before logout
+      removeSessionRefreshListeners();
+
       localStorage.removeItem("token");
       localStorage.removeItem("user");
+      // Store expiration reason for login page
+      localStorage.setItem("logoutReason", "session_expired");
       window.location.reload();
     }
     return Promise.reject(error);
   }
 );
+
+// Function to check token expiry and logout if expired
+export const checkTokenExpiry = () => {
+  const token = localStorage.getItem("token");
+  if (!token) return;
+
+  try {
+    // Decode JWT token to check expiry
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    const currentTime = Math.floor(Date.now() / 1000);
+
+    if (payload.exp && payload.exp < currentTime) {
+      // Remove session refresh listeners before logout
+      removeSessionRefreshListeners();
+
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      // Store expiration reason for login page
+      localStorage.setItem("logoutReason", "session_expired");
+      window.location.href = "/login";
+    } else {
+      // Token is still valid
+    }
+  } catch (error) {
+    console.error("Error checking token expiry:", error);
+    // If we can't decode the token, remove it for safety
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    window.location.href = "/login";
+  }
+};
+
+// Check token expiry every 10 seconds for better responsiveness with 2-minute expiry
+setInterval(checkTokenExpiry, 10000); // 10000ms = 10 seconds
+
+// Function to refresh session on user activity (resets 2-minute timer)
+let refreshThrottle = false;
+const refreshSessionOnActivity = async () => {
+  // Throttle to prevent too many API calls (max 1 per 30 seconds)
+  if (!refreshThrottle) {
+    refreshThrottle = true;
+
+    // Check current token
+    const token = localStorage.getItem("token");
+    if (!token) {
+      // Remove listeners since there's no token
+      removeSessionRefreshListeners();
+
+      refreshThrottle = false;
+      return;
+    }
+
+    // Check token expiry
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      const currentTime = Math.floor(Date.now() / 1000);
+      const remainingTime = payload.exp - currentTime;
+
+      if (remainingTime <= 0) {
+        refreshThrottle = false;
+        return;
+      }
+    } catch (error) {
+      refreshThrottle = false;
+      return;
+    }
+
+    try {
+      const response = await api.post("/auth/refresh-session");
+      if (response.data.success) {
+        localStorage.setItem("token", response.data.access_token);
+      }
+    } catch (error) {
+      // Session refresh failed - this is handled by the interceptor
+    }
+
+    // Allow next refresh after 30 seconds
+    setTimeout(() => {
+      refreshThrottle = false;
+    }, 30000);
+  }
+};
+
+// Store event listener references so we can remove them later
+let eventListenersAdded = false;
+
+// Function to add event listeners for session refresh
+const addSessionRefreshListeners = () => {
+  if (eventListenersAdded) return; // Already added
+
+  document.addEventListener("click", refreshSessionOnActivity);
+  document.addEventListener("keypress", refreshSessionOnActivity);
+  document.addEventListener("scroll", refreshSessionOnActivity);
+  document.addEventListener("mousemove", refreshSessionOnActivity);
+  document.addEventListener("touchstart", refreshSessionOnActivity);
+
+  eventListenersAdded = true;
+};
+
+// Function to remove event listeners for session refresh
+const removeSessionRefreshListeners = () => {
+  if (!eventListenersAdded) return; // Already removed
+
+  document.removeEventListener("click", refreshSessionOnActivity);
+  document.removeEventListener("keypress", refreshSessionOnActivity);
+  document.removeEventListener("scroll", refreshSessionOnActivity);
+  document.removeEventListener("mousemove", refreshSessionOnActivity);
+  document.removeEventListener("touchstart", refreshSessionOnActivity);
+
+  eventListenersAdded = false;
+};
+
+// Add listeners after 2 seconds (when user should be logged in)
+setTimeout(() => {
+  // Only add listeners if there's a valid token
+  const token = localStorage.getItem("token");
+  if (token) {
+    addSessionRefreshListeners();
+  }
+}, 2000);
+
+// Reset timer when page becomes visible (user switches back to tab)
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    checkTokenExpiry();
+    // Only refresh if listeners are active (user is logged in)
+    if (eventListenersAdded) {
+      refreshSessionOnActivity();
+    }
+  }
+});
 
 // Auth API
 export const login = async (email, password) => {
@@ -57,6 +266,9 @@ export const login = async (email, password) => {
         admin_id: data.admin_id,
       })
     );
+
+    // Add session refresh listeners after successful login
+    addSessionRefreshListeners();
 
     return {
       token: data.access_token,
@@ -124,11 +336,7 @@ export const setPassword = async (email, password) => {
     });
     return response.data;
   } catch (error) {
-    console.error(
-      "Set password error:",
-      error.response?.data?.detail || error.message
-    );
-    throw new Error(error.response?.data?.detail || "Failed to set password");
+    throw new Error(extractErrorMessage(error, "Failed to set password"));
   }
 };
 
@@ -140,13 +348,7 @@ export const changePassword = async (currentPassword, newPassword) => {
     });
     return response.data;
   } catch (error) {
-    console.error(
-      "Change password error:",
-      error.response?.data?.detail || error.message
-    );
-    throw new Error(
-      error.response?.data?.detail || "Failed to change password"
-    );
+    throw new Error(extractErrorMessage(error, "Failed to change password"));
   }
 };
 
@@ -156,6 +358,9 @@ export const logout = async () => {
   } catch (error) {
     console.error("Logout error:", error);
   } finally {
+    // Remove session refresh listeners before clearing localStorage
+    removeSessionRefreshListeners();
+
     // Always clear localStorage regardless of API call success
     localStorage.clear();
   }
@@ -478,6 +683,29 @@ export const getSystemStats = async () => {
       vector_db_status: "unknown",
       ai_configured: false,
     };
+  }
+};
+
+export const getOrganizationStats = async () => {
+  try {
+    const response = await api.get("/documents/stats/organization");
+    return response.data;
+  } catch (error) {
+    console.error("Organization stats error:", error);
+    return {
+      total_documents: 0,
+      organization_id: null,
+    };
+  }
+};
+
+export const debugOrganizationDocuments = async () => {
+  try {
+    const response = await api.get("/documents/debug/organization");
+    return response.data;
+  } catch (error) {
+    console.error("Debug organization error:", error);
+    return null;
   }
 };
 

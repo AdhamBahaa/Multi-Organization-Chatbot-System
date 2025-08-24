@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 from typing import Union, List
 from ..database import get_db, Admin, User
 from ..auth import get_current_user
-from ..documents import get_all_documents, upload_document, delete_document
+from ..documents import get_all_documents, get_documents_by_organization, upload_document, delete_document, get_organization_stats
 from ..models import DocumentResponse, SystemStatsResponse
+from ..document_store import document_store
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -16,9 +17,16 @@ async def get_documents(
     current_user: Union[Admin, User] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get all uploaded documents"""
+    """Get documents for the current user's organization"""
     try:
-        documents = await get_all_documents()
+        # Get organization ID from current user
+        if isinstance(current_user, Admin):
+            organization_id = current_user.OrganizationID
+        else:  # User
+            organization_id = current_user.OrganizationID
+        
+        # Get documents for this organization only
+        documents = await get_documents_by_organization(organization_id)
         return documents
     except Exception as e:
         raise HTTPException(
@@ -34,7 +42,13 @@ async def upload_document_endpoint(
 ):
     """Upload and process a document"""
     try:
-        result = await upload_document(file)
+        # Get organization ID from current user
+        if isinstance(current_user, Admin):
+            organization_id = current_user.OrganizationID
+        else:  # User
+            organization_id = current_user.OrganizationID
+        
+        result = await upload_document(file, organization_id)
         return result
     except Exception as e:
         raise HTTPException(
@@ -50,10 +64,105 @@ async def delete_document_endpoint(
 ):
     """Delete a document"""
     try:
+        # Get organization ID from current user
+        if isinstance(current_user, Admin):
+            organization_id = current_user.OrganizationID
+        else:  # User
+            organization_id = current_user.OrganizationID
+        
+        # Check if document belongs to user's organization
+        doc_data = document_store.get_document(document_id)
+        if not doc_data:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        if doc_data.get('organization_id') != organization_id:
+            raise HTTPException(status_code=403, detail="Access denied: Document belongs to different organization")
+        
         result = await delete_document(document_id)
         return {"message": "Document deleted successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Delete failed: {str(e)}"
+        )
+
+@router.get("/stats/organization")
+async def get_organization_document_stats(
+    current_user: Union[Admin, User] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get document statistics for the current user's organization"""
+    try:
+        # Get organization ID from current user
+        if isinstance(current_user, Admin):
+            organization_id = current_user.OrganizationID
+        else:  # User
+            organization_id = current_user.OrganizationID
+        
+        stats = await get_organization_stats(organization_id)
+        return stats
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get organization stats: {str(e)}"
+        )
+
+@router.get("/debug/organization")
+async def debug_organization_documents(
+    current_user: Union[Admin, User] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to check organization filtering"""
+    try:
+        # Get organization ID from current user
+        if isinstance(current_user, Admin):
+            organization_id = current_user.OrganizationID
+            user_type = "Admin"
+        else:  # User
+            organization_id = current_user.OrganizationID
+            user_type = "User"
+        
+        # Get documents for this organization
+        org_docs = document_store.get_documents_by_organization(organization_id)
+        
+        # Get all documents for comparison
+        all_docs = document_store.get_all_documents()
+        
+        return {
+            "user_info": {
+                "user_type": user_type,
+                "user_id": current_user.ID,
+                "organization_id": organization_id
+            },
+            "organization_documents": {
+                "count": len(org_docs),
+                "documents": [
+                    {
+                        "id": doc.get("id"),
+                        "filename": doc.get("filename"),
+                        "organization_id": doc.get("organization_id"),
+                        "uploaded_at": doc.get("uploaded_at")
+                    }
+                    for doc in org_docs
+                ]
+            },
+            "all_documents": {
+                "count": len(all_docs),
+                "documents": [
+                    {
+                        "id": doc.get("id"),
+                        "filename": doc.get("filename"),
+                        "organization_id": doc.get("organization_id"),
+                        "uploaded_at": doc.get("uploaded_at")
+                    }
+                    for doc in all_docs
+                ]
+            }
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Debug failed: {str(e)}"
         )

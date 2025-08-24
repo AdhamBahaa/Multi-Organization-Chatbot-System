@@ -31,7 +31,36 @@ ALLOWED_FILE_TYPES = {
     'text/plain': '.txt',
     'application/msword': '.doc',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
-    'text/csv': '.csv'
+    'text/csv': '.csv',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+    'application/vnd.ms-excel': '.xls',
+    'text/markdown': '.md'
+}
+
+# Explicitly blocked file types (images, executables, etc.)
+BLOCKED_FILE_TYPES = {
+    # Image files
+    'image/jpeg': '.jpg',
+    'image/jpg': '.jpg', 
+    'image/png': '.png',
+    'image/gif': '.gif',
+    'image/bmp': '.bmp',
+    'image/tiff': '.tiff',
+    'image/webp': '.webp',
+    'image/svg+xml': '.svg',
+    # Video files
+    'video/mp4': '.mp4',
+    'video/avi': '.avi',
+    'video/mov': '.mov',
+    'video/wmv': '.wmv',
+    # Audio files
+    'audio/mpeg': '.mp3',
+    'audio/wav': '.wav',
+    'audio/ogg': '.ogg',
+    # Executable files
+    'application/x-executable': '.exe',
+    'application/x-msdownload': '.exe',
+    'application/x-msi': '.msi'
 }
 
 # Development Mode Configuration - Shared Only

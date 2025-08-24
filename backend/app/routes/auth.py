@@ -4,7 +4,7 @@ Authentication and user management routes
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Union
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from ..database import get_db, Admin, User
 from ..models import LoginRequest, TokenResponse, SetPasswordRequest, UpdateProfileRequest
 from ..auth import AuthManager, get_current_user, create_user_token
@@ -79,9 +79,13 @@ async def set_password(
                 detail="Password already set for this admin"
             )
         
-        # Set password for admin
+        # Set password for admin and mark as activated
         admin.PasswordHash = AuthManager.get_password_hash(password_data.password)
+        admin.isActivated = 1  # Use integer 1 for True
         db.commit()
+        db.refresh(admin)  # Refresh the object to get updated values
+        
+
         
         # Send welcome email to admin
         try:
@@ -104,9 +108,11 @@ async def set_password(
                 detail="Password already set for this user"
             )
         
-        # Set password for user
+        # Set password for user and mark as activated
         user.PasswordHash = AuthManager.get_password_hash(password_data.password)
+        user.isActivated = 1  # Use integer 1 for True
         db.commit()
+        db.refresh(user)  # Refresh the object to get updated values
         
         # Send welcome email to user
         try:
@@ -133,23 +139,45 @@ async def update_profile(
 ):
     """Update user profile (name and email)"""
     
-    # Check if email is already taken by another user
+    # Check if email is already taken by another user (cross-table validation)
     if isinstance(current_user, Admin):
-        existing_email = db.query(Admin).filter(
+        # Check if email exists in Admin table (excluding current admin)
+        existing_admin = db.query(Admin).filter(
             Admin.Email == profile_data.email,
             Admin.AdminID != current_user.AdminID
         ).first()
+        if existing_admin:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email is already registered"
+            )
+        
+        # Check if email exists in User table
+        existing_user = db.query(User).filter(User.Email == profile_data.email).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email is already registered"
+            )
     else:
-        existing_email = db.query(User).filter(
+        # Check if email exists in User table (excluding current user)
+        existing_user = db.query(User).filter(
             User.Email == profile_data.email,
             User.UserID != current_user.UserID
         ).first()
-    
-    if existing_email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already taken by another user"
-        )
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email is already registered"
+            )
+        
+        # Check if email exists in Admin table
+        existing_admin = db.query(Admin).filter(Admin.Email == profile_data.email).first()
+        if existing_admin:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email is already registered"
+            )
     
     # Update profile
     current_user.FullName = profile_data.full_name
@@ -161,6 +189,14 @@ async def update_profile(
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+    
+    @validator('new_password')
+    def validate_new_password(cls, v):
+        from ..utils import validate_password_strength
+        is_valid, error_message = validate_password_strength(v)
+        if not is_valid:
+            raise ValueError(error_message)
+        return v
 
 @router.post("/change-password")
 async def change_password(
@@ -180,6 +216,28 @@ async def change_password(
     # Update password
     current_user.PasswordHash = AuthManager.get_password_hash(password_data.new_password)
     db.commit()
+    
+    # Send email notification
+    try:
+        from ..email_service import EmailService
+        email_service = EmailService()
+        
+        # Determine role and send notification
+        if isinstance(current_user, Admin):
+            role = "admin"
+            if current_user.AdminID == 0:
+                role = "super_admin"
+        else:
+            role = "user"
+        
+        email_service.send_password_change_notification(
+            to_email=current_user.Email,
+            full_name=current_user.FullName,
+            role=role
+        )
+    except Exception as e:
+        print(f"⚠️ Failed to send password change notification: {e}")
+        # Don't fail the password change if email fails
     
     return {"message": "Password changed successfully"}
 
@@ -256,6 +314,35 @@ async def get_my_admin(
         "email": admin.Email,
         "created_at": admin.CreatedAt
     }
+
+@router.post("/refresh-session")
+async def refresh_session(
+    current_user: Union[Admin, User] = Depends(get_current_user)
+):
+    """Refresh user session by extending token expiry"""
+    try:
+        # Determine role based on user type
+        if isinstance(current_user, Admin):
+            if current_user.AdminID == 0:
+                role = "super_admin"
+            else:
+                role = "admin"
+        else:
+            role = "user"
+        
+        # Create new token with extended expiry
+        token_response = create_user_token(current_user, role)
+        
+        return {
+            "success": True,
+            "access_token": token_response.access_token,
+            "message": "Session refreshed successfully"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to refresh session"
+        )
 
 @router.post("/logout")
 async def logout():

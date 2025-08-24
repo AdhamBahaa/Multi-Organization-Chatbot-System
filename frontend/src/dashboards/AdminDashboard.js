@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import UserManager from "../components/UserManager";
 import OrganizationInfo from "../components/OrganizationInfo";
+import AdminProfile from "../components/AdminProfile";
 import Chat from "../Chat";
 import Documents from "../Documents";
 import Settings from "../Settings";
@@ -48,6 +49,11 @@ const AdminDashboard = ({ user, onLogout }) => {
       console.error("Error loading stats:", error);
     }
   };
+
+  // Memoize callback function to prevent infinite re-renders
+  const handleUsersStatsUpdate = useCallback((count) => {
+    setStats((prev) => ({ ...prev, totalUsers: count }));
+  }, []);
 
   return (
     <div className="admin-dashboard">
@@ -108,6 +114,12 @@ const AdminDashboard = ({ user, onLogout }) => {
           📁 Documents
         </button>
         <button
+          className={`tab-button ${activeTab === "profile" ? "active" : ""}`}
+          onClick={() => setActiveTab("profile")}
+        >
+          👤 Profile
+        </button>
+        <button
           className={`tab-button ${activeTab === "settings" ? "active" : ""}`}
           onClick={() => setActiveTab("settings")}
         >
@@ -120,13 +132,14 @@ const AdminDashboard = ({ user, onLogout }) => {
         {activeTab === "users" && (
           <UserManager
             adminId={user.id}
-            onStatsUpdate={(count) =>
-              setStats((prev) => ({ ...prev, totalUsers: count }))
-            }
+            onStatsUpdate={handleUsersStatsUpdate}
           />
         )}
         {activeTab === "chatbot" && <Chat />}
         {activeTab === "documents" && <Documents user={user} />}
+        {activeTab === "profile" && (
+          <AdminProfile admin={user} onUpdate={() => {}} />
+        )}
         {activeTab === "settings" && <Settings />}
       </div>
     </div>
