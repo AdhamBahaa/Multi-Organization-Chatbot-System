@@ -75,10 +75,18 @@ class DocumentStore:
     
     def get_documents_by_organization(self, organization_id: int) -> List[dict]:
         """Get documents for a specific organization"""
-        return [
-            doc for doc in self.documents.values() 
-            if doc.get('organization_id') == organization_id
-        ]
+        print(f"🔍 Filtering documents for organization {organization_id}")
+        print(f"   Total documents in store: {len(self.documents)}")
+        
+        filtered_docs = []
+        for doc_id, doc_data in self.documents.items():
+            doc_org_id = doc_data.get('organization_id')
+            print(f"   Document {doc_data.get('filename', 'Unknown')}: org_id={doc_org_id}, matches={doc_org_id == organization_id}")
+            if doc_org_id == organization_id:
+                filtered_docs.append(doc_data)
+        
+        print(f"   Documents matching organization {organization_id}: {len(filtered_docs)}")
+        return filtered_docs
     
     def document_exists(self, doc_id: str) -> bool:
         """Check if a document exists"""

@@ -123,7 +123,25 @@ async def get_organization_stats(organization_id: int) -> dict:
     """Get statistics for a specific organization"""
     org_docs = document_store.get_documents_by_organization(organization_id)
     
+    # Debug: Print document details for this organization
+    print(f"🔍 Organization {organization_id} stats:")
+    print(f"   Total documents found: {len(org_docs)}")
+    for i, doc in enumerate(org_docs):
+        print(f"   Document {i+1}: {doc.get('filename', 'Unknown')} (ID: {doc.get('id', 'Unknown')})")
+    
+    # Return detailed information including document list
     return {
         "total_documents": len(org_docs),
-        "organization_id": organization_id
+        "organization_id": organization_id,
+        "documents": [
+            {
+                "id": doc.get("id"),
+                "filename": doc.get("filename"),
+                "organization_id": doc.get("organization_id"),
+                "has_extracted_text": bool(doc.get("extracted_text")),
+                "text_length": len(doc.get("extracted_text", "")),
+                "chunk_count": doc.get("chunk_count", 0)
+            }
+            for doc in org_docs
+        ]
     }

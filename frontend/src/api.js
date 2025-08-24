@@ -686,4 +686,27 @@ export const getSystemStats = async () => {
   }
 };
 
+export const getOrganizationStats = async () => {
+  try {
+    const response = await api.get("/documents/stats/organization");
+    return response.data;
+  } catch (error) {
+    console.error("Organization stats error:", error);
+    return {
+      total_documents: 0,
+      organization_id: null,
+    };
+  }
+};
+
+export const debugOrganizationDocuments = async () => {
+  try {
+    const response = await api.get("/documents/debug/organization");
+    return response.data;
+  } catch (error) {
+    console.error("Debug organization error:", error);
+    return null;
+  }
+};
+
 export default api;

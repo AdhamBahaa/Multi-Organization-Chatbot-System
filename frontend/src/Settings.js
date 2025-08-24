@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { getSystemStats, getUsers } from "./api";
+import {
+  getSystemStats,
+  getUsers,
+  getOrganizationStats,
+  debugOrganizationDocuments,
+} from "./api";
 
 function Settings() {
   const [stats, setStats] = useState({
@@ -7,10 +12,14 @@ function Settings() {
     total_chunks: 0,
     vector_db_status: "unknown",
     ai_configured: false,
+    organization_id: null,
+    documents: [],
   });
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [debugInfo, setDebugInfo] = useState(null);
+  const [debugLoading, setDebugLoading] = useState(false);
 
   useEffect(() => {
     loadSystemData();
@@ -20,9 +29,23 @@ function Settings() {
     setLoading(true);
     setError(null);
     try {
-      // Load system stats
-      const systemStats = await getSystemStats();
-      setStats(systemStats);
+      // Load organization-specific stats instead of system-wide stats
+      try {
+        const orgStats = await getOrganizationStats();
+        setStats((prevStats) => ({
+          ...prevStats,
+          total_documents: orgStats.total_documents || 0,
+          organization_id: orgStats.organization_id || null,
+          documents: orgStats.documents || [],
+        }));
+      } catch (orgError) {
+        console.log(
+          "Organization stats not available, falling back to system stats"
+        );
+        // Fallback to system stats if organization stats fail
+        const systemStats = await getSystemStats();
+        setStats(systemStats);
+      }
 
       // Try to load users (admin only)
       try {
@@ -36,6 +59,20 @@ function Settings() {
       setError("Failed to load system settings");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const debugOrganization = async () => {
+    setDebugLoading(true);
+    try {
+      const debugData = await debugOrganizationDocuments();
+      setDebugInfo(debugData);
+      console.log("Debug info:", debugData);
+    } catch (error) {
+      console.error("Debug failed:", error);
+      setError("Debug failed");
+    } finally {
+      setDebugLoading(false);
     }
   };
 
@@ -181,7 +218,7 @@ function Settings() {
             <div
               style={{ fontSize: "14px", color: "#1e40af", marginTop: "5px" }}
             >
-              Total Documents
+              Organization Documents
             </div>
           </div>
 
@@ -206,6 +243,60 @@ function Settings() {
           </div>
         </div>
       </div>
+
+      {/* Detailed Document Information */}
+      {stats.documents && stats.documents.length > 0 && (
+        <div style={{ marginBottom: "30px" }}>
+          <h3>Document Details</h3>
+          <div
+            style={{
+              padding: "15px",
+              backgroundColor: "#f8fafc",
+              borderRadius: "8px",
+            }}
+          >
+            <div
+              style={{
+                marginBottom: "10px",
+                fontSize: "14px",
+                color: "#64748b",
+              }}
+            >
+              Organization ID: {stats.organization_id}
+            </div>
+            {stats.documents.map((doc, index) => (
+              <div
+                key={doc.id}
+                style={{
+                  padding: "12px",
+                  backgroundColor: "white",
+                  borderRadius: "6px",
+                  marginBottom: "8px",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: "500",
+                    color: "#374151",
+                    marginBottom: "4px",
+                  }}
+                >
+                  {doc.filename}
+                </div>
+                <div style={{ fontSize: "12px", color: "#6b7280" }}>
+                  ID: {doc.id} • Organization: {doc.organization_id}
+                </div>
+                <div style={{ fontSize: "12px", color: "#6b7280" }}>
+                  Text:{" "}
+                  {doc.has_extracted_text ? "✅ Extracted" : "❌ Not extracted"}
+                  • Length: {doc.text_length} chars • Chunks: {doc.chunk_count}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* AI Model Settings */}
       <div style={{ marginBottom: "30px" }}>
@@ -261,6 +352,61 @@ function Settings() {
               Maximum response length
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Debug Section */}
+      <div style={{ marginBottom: "30px" }}>
+        <h3>Debug & Troubleshooting</h3>
+        <div
+          style={{
+            padding: "15px",
+            backgroundColor: "#fef3c7",
+            borderRadius: "8px",
+          }}
+        >
+          <div style={{ marginBottom: "15px" }}>
+            <button
+              onClick={debugOrganization}
+              disabled={debugLoading}
+              style={{
+                padding: "10px 20px",
+                backgroundColor: "#f59e0b",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "14px",
+              }}
+            >
+              {debugLoading ? "Loading..." : "Debug Organization Filtering"}
+            </button>
+            <div
+              style={{ fontSize: "12px", color: "#92400e", marginTop: "5px" }}
+            >
+              Click to see detailed information about your organization's
+              documents
+            </div>
+          </div>
+
+          {debugInfo && (
+            <div style={{ marginTop: "15px", fontSize: "12px" }}>
+              <h4 style={{ margin: "0 0 10px 0", color: "#92400e" }}>
+                Debug Information:
+              </h4>
+              <pre
+                style={{
+                  backgroundColor: "#fef3c7",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  overflow: "auto",
+                  fontSize: "11px",
+                }}
+              >
+                {JSON.stringify(debugInfo, null, 2)}
+              </pre>
+            </div>
+          )}
         </div>
       </div>
 

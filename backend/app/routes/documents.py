@@ -8,6 +8,7 @@ from ..database import get_db, Admin, User
 from ..auth import get_current_user
 from ..documents import get_all_documents, get_documents_by_organization, upload_document, delete_document, get_organization_stats
 from ..models import DocumentResponse, SystemStatsResponse
+from ..document_store import document_store
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -70,7 +71,6 @@ async def delete_document_endpoint(
             organization_id = current_user.OrganizationID
         
         # Check if document belongs to user's organization
-        from ..document_store import document_store
         doc_data = document_store.get_document(document_id)
         if not doc_data:
             raise HTTPException(status_code=404, detail="Document not found")
@@ -107,4 +107,62 @@ async def get_organization_document_stats(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get organization stats: {str(e)}"
+        )
+
+@router.get("/debug/organization")
+async def debug_organization_documents(
+    current_user: Union[Admin, User] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to check organization filtering"""
+    try:
+        # Get organization ID from current user
+        if isinstance(current_user, Admin):
+            organization_id = current_user.OrganizationID
+            user_type = "Admin"
+        else:  # User
+            organization_id = current_user.OrganizationID
+            user_type = "User"
+        
+        # Get documents for this organization
+        org_docs = document_store.get_documents_by_organization(organization_id)
+        
+        # Get all documents for comparison
+        all_docs = document_store.get_all_documents()
+        
+        return {
+            "user_info": {
+                "user_type": user_type,
+                "user_id": current_user.ID,
+                "organization_id": organization_id
+            },
+            "organization_documents": {
+                "count": len(org_docs),
+                "documents": [
+                    {
+                        "id": doc.get("id"),
+                        "filename": doc.get("filename"),
+                        "organization_id": doc.get("organization_id"),
+                        "uploaded_at": doc.get("uploaded_at")
+                    }
+                    for doc in org_docs
+                ]
+            },
+            "all_documents": {
+                "count": len(all_docs),
+                "documents": [
+                    {
+                        "id": doc.get("id"),
+                        "filename": doc.get("filename"),
+                        "organization_id": doc.get("organization_id"),
+                        "uploaded_at": doc.get("uploaded_at")
+                    }
+                    for doc in all_docs
+                ]
+            }
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Debug failed: {str(e)}"
         )

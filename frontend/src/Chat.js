@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { sendMessage, getChatSessions } from "./api";
+import { sendMessage } from "./api";
 import "./Chat.css";
 
 function Chat() {
@@ -7,7 +7,7 @@ function Chat() {
     {
       id: 1,
       content:
-        "Hello! I'm your RAG chatbot assistant. Upload some documents and I'll help you find information from them.",
+        "Hello! I'm your AI-powered RAG chatbot assistant. I can help you find information from your uploaded documents. Simply ask me anything and I'll search through your documents to provide accurate answers.",
       role: "assistant",
       timestamp: new Date(),
     },
@@ -17,6 +17,7 @@ function Chat() {
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [error, setError] = useState(null);
   const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -25,6 +26,20 @@ function Chat() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, []);
+
+  useEffect(() => {
+    console.log(
+      "Session ID changed:",
+      currentSessionId,
+      typeof currentSessionId
+    );
+  }, [currentSessionId]);
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -45,14 +60,26 @@ function Chat() {
     try {
       const response = await sendMessage(inputMessage, currentSessionId);
 
+      // Ensure response exists and has required properties
+      if (!response) {
+        throw new Error("No response received from the server");
+      }
+
       // Update session ID if this is the first message
-      if (!currentSessionId) {
+      if (!currentSessionId && response.session_id) {
+        console.log(
+          "Setting new session ID:",
+          response.session_id,
+          typeof response.session_id
+        );
         setCurrentSessionId(response.session_id);
       }
 
       const botMessage = {
-        id: response.message_id,
-        content: response.response,
+        id: response.message_id || Date.now(),
+        content:
+          response.response ||
+          "I'm sorry, I couldn't generate a response. Please try again.",
         role: "assistant",
         timestamp: new Date(),
         confidence: response.confidence,
@@ -67,7 +94,8 @@ function Chat() {
 
       const errorMessage = {
         id: Date.now() + 1,
-        content: "Sorry, I encountered an error. Please try again.",
+        content:
+          "Sorry, I encountered an error while processing your request. Please try again or check your connection.",
         role: "assistant",
         timestamp: new Date(),
         isError: true,
@@ -79,126 +107,169 @@ function Chat() {
   };
 
   const clearChat = () => {
+    console.log("Clearing chat, current session ID:", currentSessionId);
     setMessages([
       {
         id: 1,
         content:
-          "Hello! I'm your RAG chatbot assistant. Upload some documents and I'll help you find information from them.",
+          "Hello! I'm your AI-powered RAG chatbot assistant. I can help you find information from your uploaded documents. Simply ask me anything and I'll search through your documents to provide accurate answers.",
         role: "assistant",
         timestamp: new Date(),
       },
     ]);
     setCurrentSessionId(null);
     setError(null);
+    console.log("Chat cleared, session ID reset to:", null);
   };
 
   const formatTime = (date) => {
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
+  const getConfidenceColor = (confidence) => {
+    if (confidence >= 0.8) return "high";
+    if (confidence >= 0.6) return "medium";
+    return "low";
+  };
+
+  const getConfidenceLabel = (confidence) => {
+    if (confidence >= 0.8) return "High";
+    if (confidence >= 0.6) return "Medium";
+    return "Low";
+  };
+
+  const formatSessionId = (sessionId) => {
+    if (!sessionId) return "";
+    if (typeof sessionId !== "string") return String(sessionId);
+    if (sessionId.length <= 8) return sessionId;
+    return `${sessionId.slice(0, 8)}...`;
+  };
+
   return (
-    <div className="card">
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "20px",
-        }}
-      >
-        <h2 style={{ margin: 0 }}>Chat Assistant</h2>
-        <button
-          onClick={clearChat}
-          className="button"
-          style={{
-            background: "rgba(239, 68, 68, 0.1)",
-            color: "#dc2626",
-            border: "1px solid rgba(239, 68, 68, 0.2)",
-          }}
-        >
-          Clear Chat
-        </button>
+    <div className="chat-container">
+      {/* Enhanced Header */}
+      <div className="chat-header">
+        <div className="chat-header-left">
+          <div className="chat-title">
+            <div className="chat-icon">🤖</div>
+            <div>
+              <h2>AI Chat Assistant</h2>
+              <p className="chat-subtitle">Powered by RAG Technology</p>
+            </div>
+          </div>
+        </div>
+        <div className="chat-header-right">
+          <button
+            onClick={clearChat}
+            className="clear-chat-btn"
+            title="Clear conversation history"
+          >
+            <span className="btn-icon">🗑️</span>
+            <span className="btn-text">Clear Chat</span>
+          </button>
+        </div>
       </div>
 
+      {/* Error Display */}
       {error && (
-        <div
-          style={{
-            background: "rgba(239, 68, 68, 0.1)",
-            color: "#dc2626",
-            padding: "10px",
-            borderRadius: "6px",
-            marginBottom: "15px",
-            fontSize: "14px",
-          }}
-        >
-          Error: {error}
+        <div className="error-banner">
+          <div className="error-icon">⚠️</div>
+          <div className="error-content">
+            <strong>Error:</strong> {error}
+          </div>
         </div>
       )}
 
-      <div
-        style={{
-          height: "400px",
-          overflowY: "auto",
-          border: "1px solid #e5e7eb",
-          borderRadius: "6px",
-          padding: "15px",
-          marginBottom: "15px",
-          background: "#fafafa",
-        }}
-      >
+      {/* Messages Container */}
+      <div className="messages-container">
         {messages.map((message) => (
-          <div key={message.id} className={`message ${message.role}`}>
-            <div style={{ marginBottom: "5px", lineHeight: "1.5" }}>
-              {message.content}
-            </div>
-
-            {/* Show sources if available */}
-            {message.sources && message.sources.length > 0 && (
-              <div
-                style={{
-                  marginTop: "10px",
-                  padding: "8px",
-                  background: "rgba(59, 130, 246, 0.1)",
-                  borderRadius: "4px",
-                  fontSize: "12px",
-                }}
-              >
-                <strong>Sources:</strong>
-                {message.sources.map((source, idx) => (
-                  <div key={idx} style={{ marginTop: "4px" }}>
-                    📄 {source.filename}{" "}
-                    {source.page_number && `(Page ${source.page_number})`}
-                    {source.similarity_score &&
-                      ` - ${Math.round(source.similarity_score * 100)}% match`}
-                  </div>
-                ))}
+          <div key={message.id} className={`message-wrapper ${message.role}`}>
+            <div
+              className={`message ${message.role} ${
+                message.isError ? "error" : ""
+              }`}
+            >
+              {/* Message Avatar */}
+              <div className="message-avatar">
+                {message.role === "user" ? "👤" : "🤖"}
               </div>
-            )}
 
-            <div style={{ fontSize: "12px", opacity: 0.7, marginTop: "5px" }}>
-              {formatTime(message.timestamp)}
-              {message.confidence !== undefined &&
-                ` • Confidence: ${Math.round(message.confidence * 100)}%`}
-              {message.chunks_found > 0 &&
-                ` • Found ${message.chunks_found} relevant chunks`}
+              {/* Message Content */}
+              <div className="message-content">
+                <div className="message-text">{message.content}</div>
+
+                {/* Sources Section */}
+                {message.sources && message.sources.length > 0 && (
+                  <div className="message-sources">
+                    <div className="sources-header">
+                      <span className="sources-icon">📄</span>
+                      <strong>Sources Found:</strong>
+                    </div>
+                    <div className="sources-list">
+                      {message.sources.map((source, idx) => (
+                        <div key={idx} className="source-item">
+                          <div className="source-filename">
+                            {source.filename}
+                            {source.page_number && (
+                              <span className="source-page">
+                                {" "}
+                                (Page {source.page_number})
+                              </span>
+                            )}
+                          </div>
+                          {source.similarity_score && (
+                            <div className="source-match">
+                              {Math.round(source.similarity_score * 100)}% match
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Message Footer */}
+                <div className="message-footer">
+                  <span className="message-time">
+                    {formatTime(message.timestamp)}
+                  </span>
+
+                  {message.confidence !== undefined && (
+                    <div
+                      className={`confidence-badge confidence-${getConfidenceColor(
+                        message.confidence
+                      )}`}
+                    >
+                      {getConfidenceLabel(message.confidence)} Confidence
+                    </div>
+                  )}
+
+                  {message.chunks_found > 0 && (
+                    <div className="chunks-info">
+                      📊 {message.chunks_found} relevant chunks found
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         ))}
 
+        {/* Loading Indicator */}
         {loading && (
-          <div className="message assistant">
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <div
-                style={{
-                  width: "20px",
-                  height: "20px",
-                  border: "2px solid #f3f3f3",
-                  borderTop: "2px solid #3498db",
-                  borderRadius: "50%",
-                  animation: "spin 1s linear infinite",
-                }}
-              ></div>
-              Thinking...
+          <div className="message-wrapper assistant">
+            <div className="message assistant loading">
+              <div className="message-avatar">🤖</div>
+              <div className="message-content">
+                <div className="typing-indicator">
+                  <div className="typing-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                  <span className="typing-text">AI is thinking...</span>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -206,37 +277,68 @@ function Chat() {
         <div ref={messagesEndRef} />
       </div>
 
-      <form onSubmit={handleSend} style={{ display: "flex", gap: "10px" }}>
-        <input
-          type="text"
-          className="input"
-          value={inputMessage}
-          onChange={(e) => setInputMessage(e.target.value)}
-          placeholder="Ask me anything about your uploaded documents..."
-          disabled={loading}
-          style={{ flex: 1 }}
-        />
-        <button
-          type="submit"
-          className="button"
-          disabled={!inputMessage.trim() || loading}
-        >
-          {loading ? "..." : "Send"}
-        </button>
+      {/* Enhanced Input Form */}
+      <form onSubmit={handleSend} className="chat-input-form">
+        <div className="input-container">
+          <input
+            ref={inputRef}
+            type="text"
+            className="chat-input"
+            value={inputMessage}
+            onChange={(e) => setInputMessage(e.target.value)}
+            placeholder="Ask me anything about your uploaded documents..."
+            disabled={loading}
+            maxLength={500}
+          />
+          <div className="input-actions">
+            <div className="char-count">{inputMessage.length}/500</div>
+            <button
+              type="submit"
+              className="send-button"
+              disabled={!inputMessage.trim() || loading}
+              title={
+                !inputMessage.trim() ? "Please enter a message" : "Send message"
+              }
+            >
+              {loading ? (
+                <span className="send-loading">
+                  <div className="send-spinner"></div>
+                </span>
+              ) : (
+                <>
+                  <span className="send-icon">📤</span>
+                  <span className="send-text">Send</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
       </form>
 
+      {/* Session Info */}
       {currentSessionId && (
-        <div
-          style={{
-            fontSize: "12px",
-            color: "#6b7280",
-            marginTop: "10px",
-            textAlign: "center",
-          }}
-        >
-          Session ID: {currentSessionId}
+        <div className="session-info">
+          <div className="session-badge">
+            <span className="session-icon">🔗</span>
+            Session: {formatSessionId(currentSessionId)}
+          </div>
         </div>
       )}
+
+      {/* Quick Tips */}
+      <div className="quick-tips">
+        <div className="tips-header">
+          <span className="tips-icon">💡</span>
+          <strong>Quick Tips:</strong>
+        </div>
+        <div className="tips-content">
+          <span className="tip">Ask specific questions for better results</span>
+          <span className="tip">
+            I can search through all your uploaded documents
+          </span>
+          <span className="tip">Available in English and Arabic</span>
+        </div>
+      </div>
     </div>
   );
 }
