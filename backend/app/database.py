@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text, Boolean, NVARCHAR
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.sql import func
@@ -15,7 +15,7 @@ DB_HOST = os.getenv("DB_HOST")
 DB_NAME = os.getenv("DB_NAME")
 DB_DRIVER = os.getenv("DB_DRIVER")
 
-DATABASE_URL = f"mssql+pyodbc://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}?driver={DB_DRIVER}"
+DATABASE_URL = f"mssql+pyodbc://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}?driver={DB_DRIVER}&charset=utf8&unicode_results=true"
 
 engine = create_engine(DATABASE_URL, echo=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -77,6 +77,7 @@ class User(Base):
     # Relationships
     admin = relationship("Admin", back_populates="users")
     organization = relationship("Organization", back_populates="users")
+    feedback = relationship("Feedback", back_populates="user", cascade="all, delete-orphan")
     
     @property
     def is_activated_bool(self):
@@ -88,6 +89,24 @@ class User(Base):
             return int(self.isActivated) == 1
         except (ValueError, TypeError):
             return False
+
+class Feedback(Base):
+    __tablename__ = "Feedback"
+    
+    FeedbackID = Column(Integer, primary_key=True, autoincrement=True)
+    UserID = Column(Integer, ForeignKey("Users.UserID"), nullable=False)
+    OrganizationID = Column(Integer, ForeignKey("Organizations.OrganizationID"), nullable=False)
+    SessionID = Column(Integer, nullable=False)  # Chat session ID
+    MessageID = Column(Integer, nullable=False)  # Message ID within the session
+    UserMessage = Column(NVARCHAR(4000), nullable=False)  # User's original message
+    BotResponse = Column(NVARCHAR(4000), nullable=False)  # Bot's response
+    Rating = Column(Integer, nullable=False)  # 1-5 rating (1=very poor, 5=excellent)
+    Comment = Column(NVARCHAR(1000), nullable=True)  # Optional comment from user
+    CreatedAt = Column(DateTime, default=func.getdate())
+    
+    # Relationships
+    user = relationship("User", back_populates="feedback")
+    organization = relationship("Organization")
 
 # Function to create all tables
 def create_tables():

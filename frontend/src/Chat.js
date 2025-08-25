@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
-import { sendMessage } from "./api";
+import { sendMessage, submitFeedback } from "./api";
 import "./Chat.css";
 
-function Chat() {
+function Chat({ user }) {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -12,6 +12,11 @@ function Chat() {
   const [transcript, setTranscript] = useState("");
   const [isSupported, setIsSupported] = useState(false);
   const [detectedLanguage, setDetectedLanguage] = useState(null);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [currentFeedbackMessage, setCurrentFeedbackMessage] = useState(null);
+  const [feedbackRating, setFeedbackRating] = useState(0);
+  const [feedbackComment, setFeedbackComment] = useState("");
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const inputRef = useRef(null);
   const recognitionRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -25,6 +30,83 @@ function Chat() {
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Feedback functions
+  const handleFeedbackClick = (message) => {
+    // Prevent admins from opening feedback modal
+    if (user && user.role !== "user") {
+      return;
+    }
+
+    setCurrentFeedbackMessage(message);
+    setShowFeedbackModal(true);
+    setFeedbackRating(0);
+    setFeedbackComment("");
+  };
+
+  const handleFeedbackSubmit = async () => {
+    // Prevent admins from submitting feedback
+    if (user && user.role !== "user") {
+      setError("Only users can submit feedback");
+      return;
+    }
+
+    if (!currentFeedbackMessage || feedbackRating === 0) {
+      setError("Please select a rating before submitting feedback");
+      return;
+    }
+
+    setSubmittingFeedback(true);
+    try {
+      // Find the user message that preceded this bot response
+      const messageIndex = messages.findIndex(
+        (msg) => msg.id === currentFeedbackMessage.id
+      );
+      const userMessage = messageIndex > 0 ? messages[messageIndex - 1] : null;
+
+      await submitFeedback({
+        session_id: currentSessionId || 1,
+        message_id: currentFeedbackMessage.id,
+        user_message: userMessage
+          ? userMessage.content
+          : "Unknown user message",
+        bot_response: currentFeedbackMessage.content,
+        rating: feedbackRating,
+        comment: feedbackComment || null,
+      });
+
+      // Update the message to show feedback was submitted
+      setMessages((prevMessages) =>
+        prevMessages.map((msg) =>
+          msg.id === currentFeedbackMessage.id
+            ? {
+                ...msg,
+                feedbackSubmitted: true,
+                feedbackRating: feedbackRating,
+              }
+            : msg
+        )
+      );
+
+      setShowFeedbackModal(false);
+      setCurrentFeedbackMessage(null);
+      setFeedbackRating(0);
+      setFeedbackComment("");
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  };
+
+  const closeFeedbackModal = () => {
+    setShowFeedbackModal(false);
+    setCurrentFeedbackMessage(null);
+    setFeedbackRating(0);
+    setFeedbackComment("");
+    setError(null);
   };
 
   // Silence detection configuration
@@ -613,6 +695,33 @@ function Chat() {
                   </div>
                 )}
 
+                {/* Feedback Section - Only for bot responses and only for Users (not Admins) */}
+                {message.role === "assistant" &&
+                  user &&
+                  user.role === "user" &&
+                  message.id !== 1 && (
+                    <div className="message-feedback">
+                      {message.feedbackSubmitted ? (
+                        <div className="feedback-submitted">
+                          <span className="feedback-icon">✅</span>
+                          <span className="feedback-text">
+                            Feedback submitted ({message.feedbackRating}/5
+                            stars)
+                          </span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleFeedbackClick(message)}
+                          className="feedback-button"
+                          title="Rate this response"
+                        >
+                          <span className="feedback-icon">⭐</span>
+                          <span className="feedback-text">Rate Response</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                 {/* Message Footer */}
                 <div className="message-footer">
                   <span className="message-time">
@@ -661,6 +770,76 @@ function Chat() {
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Feedback Modal - Only for Users (not Admins) */}
+      {showFeedbackModal && user && user.role === "user" && (
+        <div className="feedback-modal-overlay">
+          <div className="feedback-modal">
+            <div className="feedback-modal-header">
+              <h3>Rate This Response</h3>
+              <button onClick={closeFeedbackModal} className="close-button">
+                ✕
+              </button>
+            </div>
+
+            <div className="feedback-modal-content">
+              <div className="rating-section">
+                <label>How would you rate this response?</label>
+                <div className="star-rating">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      onClick={() => setFeedbackRating(star)}
+                      className={`star-button ${
+                        feedbackRating >= star ? "active" : ""
+                      }`}
+                    >
+                      {feedbackRating >= star ? "★" : "☆"}
+                    </button>
+                  ))}
+                </div>
+                <div className="rating-labels">
+                  <span>Poor</span>
+                  <span>Fair</span>
+                  <span>Good</span>
+                  <span>Very Good</span>
+                  <span>Excellent</span>
+                </div>
+              </div>
+
+              <div className="comment-section">
+                <label htmlFor="feedback-comment">
+                  Additional Comments (Optional)
+                </label>
+                <textarea
+                  id="feedback-comment"
+                  value={feedbackComment}
+                  onChange={(e) => setFeedbackComment(e.target.value)}
+                  placeholder="Share your thoughts about this response..."
+                  rows="3"
+                  maxLength="500"
+                />
+                <div className="char-count">{feedbackComment.length}/500</div>
+              </div>
+
+              {error && <div className="error-message">{error}</div>}
+            </div>
+
+            <div className="feedback-modal-footer">
+              <button onClick={closeFeedbackModal} className="cancel-button">
+                Cancel
+              </button>
+              <button
+                onClick={handleFeedbackSubmit}
+                disabled={feedbackRating === 0 || submittingFeedback}
+                className="submit-button"
+              >
+                {submittingFeedback ? "Submitting..." : "Submit Feedback"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Enhanced Input Form */}
       <form onSubmit={handleSend} className="chat-input-form">

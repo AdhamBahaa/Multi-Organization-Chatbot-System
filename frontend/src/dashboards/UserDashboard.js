@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import UserProfile from "../components/UserProfile";
-import OrganizationInfo from "../components/OrganizationInfo";
 import Chat from "../Chat";
 import Documents from "../Documents";
 import { getMyOrganization, getMyAdmin } from "../api";
@@ -17,7 +16,7 @@ const UserDashboard = ({ user, onLogout }) => {
     loadUserInfo();
     loadAdminInfo();
     loadOrganizationInfo();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadUserInfo = async () => {
     try {
@@ -25,7 +24,7 @@ const UserDashboard = ({ user, onLogout }) => {
       setUserInfo({
         id: user.id,
         email: user.email,
-        fullName: user.full_name,
+        full_name: user.full_name,
         role: user.organization_role || user.role, // Use organization role if available, fallback to system role
         createdAt: new Date().toLocaleDateString(),
       });
@@ -134,7 +133,7 @@ const UserDashboard = ({ user, onLogout }) => {
       {/* Content Area */}
       <div className="dashboard-content">
         {activeTab === "profile" && <UserProfile userInfo={userInfo} />}
-        {activeTab === "chatbot" && <Chat />}
+        {activeTab === "chatbot" && <Chat user={user} />}
         {activeTab === "documents" && <Documents user={user} />}
       </div>
     </div>

@@ -113,6 +113,20 @@ const UserProfile = ({ userInfo }) => {
     setMessage("");
   };
 
+  // Add null checking for userInfo
+  if (!userInfo) {
+    return (
+      <div className="user-profile">
+        <div className="profile-header">
+          <h2>User Profile</h2>
+        </div>
+        <div className="profile-info">
+          <p>Loading user information...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="user-profile">
       <div className="profile-header">
