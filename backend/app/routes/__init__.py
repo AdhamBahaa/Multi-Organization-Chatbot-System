@@ -10,6 +10,7 @@ from .system import router as system_router
 from .chat import router as chat_router
 from .documents import router as documents_router
 from .feedback import router as feedback_router
+from .chat_history import router as chat_history_router
 
 # Create main router
 router = APIRouter()
@@ -23,6 +24,7 @@ router.include_router(system_router)
 router.include_router(chat_router)
 router.include_router(documents_router)
 router.include_router(feedback_router, prefix="/feedback", tags=["feedback"])
+router.include_router(chat_history_router, prefix="/chat-history", tags=["chat-history"])
 
 # Export the main router
 __all__ = ["router"]

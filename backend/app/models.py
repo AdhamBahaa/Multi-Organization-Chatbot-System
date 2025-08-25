@@ -129,6 +129,33 @@ class ChatResponse(BaseModel):
     confidence: float = 0.0
     chunks_found: int = 0
 
+# Chat History Models
+class ChatSessionResponse(BaseModel):
+    session_id: int
+    title: str
+    created_at: datetime
+    updated_at: datetime
+    message_count: int
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+class ChatMessageResponse(BaseModel):
+    message_id: int
+    session_id: int
+    role: str
+    content: str
+    timestamp: datetime
+    message_order: int
+
+    class Config:
+        from_attributes = True
+
+class ChatHistoryResponse(BaseModel):
+    session: ChatSessionResponse
+    messages: List[ChatMessageResponse]
+
 # Feedback Models
 class FeedbackCreate(BaseModel):
     session_id: int

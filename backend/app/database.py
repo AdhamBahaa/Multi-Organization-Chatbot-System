@@ -78,6 +78,8 @@ class User(Base):
     admin = relationship("Admin", back_populates="users")
     organization = relationship("Organization", back_populates="users")
     feedback = relationship("Feedback", back_populates="user", cascade="all, delete-orphan")
+    chat_sessions = relationship("ChatSession", back_populates="user", cascade="all, delete-orphan")
+    chat_messages = relationship("ChatMessage", back_populates="user", cascade="all, delete-orphan")
     
     @property
     def is_activated_bool(self):
@@ -107,6 +109,38 @@ class Feedback(Base):
     # Relationships
     user = relationship("User", back_populates="feedback")
     organization = relationship("Organization")
+
+# Chat History Models
+class ChatSession(Base):
+    __tablename__ = "ChatSessions"
+    
+    SessionID = Column(Integer, primary_key=True, autoincrement=True)
+    UserID = Column(Integer, ForeignKey("Users.UserID"), nullable=False)
+    OrganizationID = Column(Integer, ForeignKey("Organizations.OrganizationID"), nullable=False)
+    Title = Column(NVARCHAR(255), nullable=True)  # Auto-generated title from first message
+    CreatedAt = Column(DateTime, default=func.getdate())
+    UpdatedAt = Column(DateTime, default=func.getdate(), onupdate=func.getdate())
+    IsActive = Column(Boolean, default=True)  # To mark sessions as active/inactive
+    
+    # Relationships
+    user = relationship("User", back_populates="chat_sessions")
+    organization = relationship("Organization")
+    messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
+
+class ChatMessage(Base):
+    __tablename__ = "ChatMessages"
+    
+    MessageID = Column(Integer, primary_key=True, autoincrement=True)
+    SessionID = Column(Integer, ForeignKey("ChatSessions.SessionID"), nullable=False)
+    UserID = Column(Integer, ForeignKey("Users.UserID"), nullable=False)
+    Role = Column(String(20), nullable=False)  # "user" or "assistant"
+    Content = Column(NVARCHAR(4000), nullable=False)
+    Timestamp = Column(DateTime, default=func.getdate())
+    MessageOrder = Column(Integer, nullable=False)  # Order within the session
+    
+    # Relationships
+    session = relationship("ChatSession", back_populates="messages")
+    user = relationship("User", back_populates="chat_messages")
 
 # Function to create all tables
 def create_tables():

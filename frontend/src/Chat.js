@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { sendMessage, submitFeedback } from "./api";
+import ChatHistory from "./components/ChatHistory";
 import "./Chat.css";
 
 function Chat({ user }) {
@@ -27,6 +28,7 @@ function Chat({ user }) {
   const [isLanguageSwitching, setIsLanguageSwitching] = useState(false); // Track language switching state
   const startSilenceDetectionRef = useRef(null); // Ref for silence detection function
   const isLanguageSwitchingRef = useRef(false); // Ref for language switching state
+  const [showChatHistory, setShowChatHistory] = useState(false); // Show/hide chat history
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -99,6 +101,27 @@ function Chat({ user }) {
     } finally {
       setSubmittingFeedback(false);
     }
+  };
+
+  // Chat History functions
+  const handleLoadSession = (sessionId, sessionMessages) => {
+    // Convert session messages to chat format
+    const formattedMessages = sessionMessages.map((msg, index) => ({
+      id: msg.message_id,
+      role: msg.role,
+      content: msg.content,
+      timestamp: new Date(msg.timestamp), // Convert string to Date object
+      feedbackSubmitted: false, // Reset feedback state for loaded messages
+    }));
+
+    setMessages(formattedMessages);
+    setCurrentSessionId(sessionId);
+    setShowChatHistory(false); // Hide chat history after loading
+    setError(null);
+  };
+
+  const toggleChatHistory = () => {
+    setShowChatHistory(!showChatHistory);
   };
 
   const closeFeedbackModal = () => {
@@ -613,7 +636,7 @@ function Chat({ user }) {
   };
 
   return (
-    <div className="chat-container">
+    <div className={`chat-container ${showChatHistory ? "history-open" : ""}`}>
       {/* Enhanced Header */}
       <div className="chat-header">
         <div className="chat-header-left">
@@ -626,6 +649,17 @@ function Chat({ user }) {
           </div>
         </div>
         <div className="chat-header-right">
+          {/* Chat History Button - Only for Users */}
+          {user && user.role === "user" && (
+            <button
+              onClick={toggleChatHistory}
+              className="chat-history-btn"
+              title="View chat history"
+            >
+              <span className="btn-icon">📚</span>
+              <span className="btn-text">History</span>
+            </button>
+          )}
           <button
             onClick={clearChat}
             className="clear-chat-btn"
@@ -966,39 +1000,16 @@ function Chat({ user }) {
         </div>
       )}
 
-      {/* Quick Tips */}
-      <div className="quick-tips">
-        <div className="tips-header">
-          <span className="tips-icon">💡</span>
-          <span>Quick Tips</span>
+      {/* Chat History Sidebar */}
+      {showChatHistory && user && user.role === "user" && (
+        <div className="chat-history-sidebar">
+          <ChatHistory
+            onLoadSession={handleLoadSession}
+            currentSessionId={currentSessionId}
+            onClose={() => setShowChatHistory(false)}
+          />
         </div>
-        <div className="tips-content">
-          <div className="tip">
-            <strong>Voice Input:</strong> Click the microphone button to ask
-            questions using your voice
-          </div>
-          <div className="tip">
-            <strong>Auto Language Detection:</strong> I automatically detect
-            English or Arabic (Egyptian & Modern Standard)
-          </div>
-          <div className="tip">
-            <strong>Arabic Support:</strong> Speak naturally in Egyptian Arabic
-            or Modern Standard Arabic
-          </div>
-          <div className="tip">
-            <strong>Silence Detection:</strong> Recording automatically stops
-            after 2 seconds of silence
-          </div>
-          <div className="tip">
-            <strong>Clear Questions:</strong> Ask specific questions for better
-            document search results
-          </div>
-          <div className="tip">
-            <strong>Document References:</strong> I'll show you which documents
-            I used to answer your questions
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
