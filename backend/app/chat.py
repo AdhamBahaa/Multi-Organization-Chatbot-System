@@ -5,6 +5,7 @@ import google.generativeai as genai
 from .models import ChatRequest, ChatResponse
 from .utils import search_documents
 from .config import API_KEY
+from .database import ChatSession, ChatMessage
 import re
 import time
 import hashlib

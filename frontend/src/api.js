@@ -768,4 +768,48 @@ export const getFeedbackStats = async () => {
   }
 };
 
+// Chat History API functions
+export const getUserSessions = async () => {
+  try {
+    const response = await api.get("/chat-history/sessions");
+    return response.data;
+  } catch (error) {
+    console.error(
+      "Get user sessions error:",
+      error.response?.data?.detail || error.message
+    );
+    throw new Error(
+      error.response?.data?.detail || "Failed to get user sessions"
+    );
+  }
+};
+
+export const getSessionHistory = async (sessionId) => {
+  try {
+    const response = await api.get(`/chat-history/sessions/${sessionId}`);
+    return response.data;
+  } catch (error) {
+    console.error(
+      "Get session history error:",
+      error.response?.data?.detail || error.message
+    );
+    throw new Error(
+      error.response?.data?.detail || "Failed to get session history"
+    );
+  }
+};
+
+export const deleteSession = async (sessionId) => {
+  try {
+    const response = await api.delete(`/chat-history/sessions/${sessionId}`);
+    return response.data;
+  } catch (error) {
+    console.error(
+      "Delete session error:",
+      error.response?.data?.detail || error.message
+    );
+    throw new Error(error.response?.data?.detail || "Failed to delete session");
+  }
+};
+
 export default api;

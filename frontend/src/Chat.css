@@ -7,6 +7,8 @@
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   border: 1px solid #f0f0f0;
+  transition: all 0.3s ease-out;
+  width: 100%;
 }
 
 /* Enhanced Header */
@@ -71,6 +73,28 @@
   font-size: 14px;
   opacity: 0.9;
   font-weight: 400;
+}
+
+.chat-history-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: rgba(16, 185, 129, 0.8);
+  color: white;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.chat-history-btn:hover {
+  background: rgba(16, 185, 129, 0.9);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
 }
 
 .clear-chat-btn {
@@ -573,6 +597,65 @@
   font-size: 12px;
   border: 1px solid #e2e8f0;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Chat History Sidebar */
+.chat-history-sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 650px;
+  height: 100vh;
+  background: white;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  animation: slideInRight 0.3s ease-out;
+  overflow: hidden;
+}
+
+/* Adjust main chat container when history is open */
+.chat-container.history-open {
+  max-width: calc(100% - 670px);
+  margin-right: 20px;
+}
+
+/* Ensure the main container doesn't overflow */
+.chat-container.history-open .messages-container {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .chat-container.history-open {
+    max-width: calc(100% - 420px);
+    margin-right: 20px;
+  }
+
+  .chat-history-sidebar {
+    width: 500px;
+  }
+}
+
+@media (max-width: 768px) {
+  .chat-container.history-open {
+    max-width: 100%;
+    margin-right: 0;
+  }
+
+  .chat-history-sidebar {
+    width: 100%;
+    z-index: 1001;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
 /* Voice Input Styles */
