@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import UserManager from "../components/UserManager";
-import OrganizationInfo from "../components/OrganizationInfo";
 import AdminProfile from "../components/AdminProfile";
+import FeedbackManager from "../components/FeedbackManager";
 import Chat from "../Chat";
 import Documents from "../Documents";
 import Settings from "../Settings";
@@ -19,7 +19,7 @@ const AdminDashboard = ({ user, onLogout }) => {
     // Load organization info and stats
     loadOrganizationInfo();
     loadStats();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadOrganizationInfo = async () => {
     try {
@@ -102,6 +102,12 @@ const AdminDashboard = ({ user, onLogout }) => {
           👥 Users
         </button>
         <button
+          className={`tab-button ${activeTab === "feedback" ? "active" : ""}`}
+          onClick={() => setActiveTab("feedback")}
+        >
+          ⭐ Feedback
+        </button>
+        <button
           className={`tab-button ${activeTab === "chatbot" ? "active" : ""}`}
           onClick={() => setActiveTab("chatbot")}
         >
@@ -135,7 +141,8 @@ const AdminDashboard = ({ user, onLogout }) => {
             onStatsUpdate={handleUsersStatsUpdate}
           />
         )}
-        {activeTab === "chatbot" && <Chat />}
+        {activeTab === "feedback" && <FeedbackManager />}
+        {activeTab === "chatbot" && <Chat user={user} />}
         {activeTab === "documents" && <Documents user={user} />}
         {activeTab === "profile" && (
           <AdminProfile admin={user} onUpdate={() => {}} />

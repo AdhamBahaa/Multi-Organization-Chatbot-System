@@ -6,11 +6,22 @@ from .models import ChatRequest, ChatResponse
 from .utils import search_documents
 from .config import API_KEY
 import re
+import time
+import hashlib
 
 def configure_gemini():
     """Configure Gemini API if key is available"""
     if API_KEY:
         genai.configure(api_key=API_KEY)
+
+def generate_message_id(session_id: int, user_message: str, timestamp: float) -> int:
+    """Generate a unique message ID for feedback tracking"""
+    # Create a hash from session_id, user_message, and timestamp
+    hash_input = f"{session_id}_{user_message}_{timestamp}"
+    hash_object = hashlib.md5(hash_input.encode())
+    # Convert first 6 characters of hex digest to integer (to fit in SQL Server int)
+    # This gives us a range of 0 to 16,777,215 which fits comfortably in SQL Server int
+    return int(hash_object.hexdigest()[:6], 16)
 
 def detect_language(text: str) -> str:
     """Detect the language of the input text - English or Arabic only"""
@@ -157,18 +168,24 @@ async def generate_chat_response(chat_data: ChatRequest, organization_id: int = 
             )
             ai_response = response.text.strip()
             
+            # Debug: Print the raw AI response before cleanup
+            print(f"🔍 Raw AI response: {repr(ai_response)}")
+            
             # Clean up any remaining Markdown formatting to ensure plain text
             # This removes asterisks, bold formatting, and converts any remaining Markdown to clean text
-            # Remove Markdown formatting
-            ai_response = re.sub(r'\*\*([^*]+)\*\*', r'\1', ai_response)  # Remove **bold**
-            ai_response = re.sub(r'\*([^*]+)\*', r'\1', ai_response)       # Remove *italic*
-            ai_response = re.sub(r'^\s*\*\s*', '- ', ai_response)          # Convert leading * to -
-            ai_response = re.sub(r'\n\s*\*\s*', '\n- ', ai_response)       # Convert * to - in middle
-            ai_response = re.sub(r'^\s*-\s*', '', ai_response)             # Remove leading -
-            ai_response = re.sub(r'\n\s*-\s*', '\n', ai_response)          # Remove - in middle
+            # Remove Markdown formatting (Unicode-aware)
+            ai_response = re.sub(r'\*\*([^*]+)\*\*', r'\1', ai_response, flags=re.UNICODE)  # Remove **bold**
+            ai_response = re.sub(r'\*([^*]+)\*', r'\1', ai_response, flags=re.UNICODE)       # Remove *italic*
+            ai_response = re.sub(r'^\s*\*\s*', '- ', ai_response, flags=re.UNICODE)          # Convert leading * to -
+            ai_response = re.sub(r'\n\s*\*\s*', '\n- ', ai_response, flags=re.UNICODE)       # Convert * to - in middle
+            ai_response = re.sub(r'^\s*-\s*', '', ai_response, flags=re.UNICODE)             # Remove leading -
+            ai_response = re.sub(r'\n\s*-\s*', '\n', ai_response, flags=re.UNICODE)          # Remove - in middle
             # Clean up extra whitespace
-            ai_response = re.sub(r'\n\s*\n\s*\n', '\n\n', ai_response)     # Remove excessive line breaks
+            ai_response = re.sub(r'\n\s*\n\s*\n', '\n\n', ai_response, flags=re.UNICODE)     # Remove excessive line breaks
             ai_response = ai_response.strip()
+            
+            # Debug: Print the cleaned AI response
+            print(f"🔍 Cleaned AI response: {repr(ai_response)}")
             
             # Verify the response is in the correct language
             response_language = detect_language(ai_response)
@@ -189,14 +206,14 @@ async def generate_chat_response(chat_data: ChatRequest, organization_id: int = 
                 
                 # Clean up any remaining Markdown formatting for fallback response too
                 # This ensures consistent plain text formatting across all responses
-                ai_response = re.sub(r'\*\*([^*]+)\*\*', r'\1', ai_response)  # Remove **bold**
-                ai_response = re.sub(r'\*([^*]+)\*', r'\1', ai_response)       # Remove *italic*
-                ai_response = re.sub(r'^\s*\*\s*', '- ', ai_response)          # Convert leading * to -
-                ai_response = re.sub(r'\n\s*\*\s*', '\n- ', ai_response)       # Convert * to - in middle
-                ai_response = re.sub(r'^\s*-\s*', '', ai_response)             # Remove leading -
-                ai_response = re.sub(r'\n\s*-\s*', '\n', ai_response)          # Remove - in middle
+                ai_response = re.sub(r'\*\*([^*]+)\*\*', r'\1', ai_response, flags=re.UNICODE)  # Remove **bold**
+                ai_response = re.sub(r'\*([^*]+)\*', r'\1', ai_response, flags=re.UNICODE)       # Remove *italic*
+                ai_response = re.sub(r'^\s*\*\s*', '- ', ai_response, flags=re.UNICODE)          # Convert leading * to -
+                ai_response = re.sub(r'\n\s*\*\s*', '\n- ', ai_response, flags=re.UNICODE)       # Convert * to - in middle
+                ai_response = re.sub(r'^\s*-\s*', '', ai_response, flags=re.UNICODE)             # Remove leading -
+                ai_response = re.sub(r'\n\s*-\s*', '\n', ai_response, flags=re.UNICODE)          # Remove - in middle
                 # Clean up extra whitespace
-                ai_response = re.sub(r'\n\s*\n\s*\n', '\n\n', ai_response)     # Remove excessive line breaks
+                ai_response = re.sub(r'\n\s*\n\s*\n', '\n\n', ai_response, flags=re.UNICODE)     # Remove excessive line breaks
                 ai_response = ai_response.strip()
             
         else:
@@ -207,6 +224,10 @@ async def generate_chat_response(chat_data: ChatRequest, organization_id: int = 
     
     # Mock session ID if not provided
     session_id = chat_data.session_id or 1
+    
+    # Generate unique message ID for feedback tracking
+    timestamp = time.time()
+    message_id = generate_message_id(session_id, chat_data.message, timestamp)
     
     # Calculate dynamic confidence based on relevance scores
     if search_results:
@@ -226,7 +247,7 @@ async def generate_chat_response(chat_data: ChatRequest, organization_id: int = 
     return ChatResponse(
         response=ai_response,
         session_id=session_id,
-        message_id=12345,  # Mock message ID
+        message_id=message_id,
         sources=sources,
         confidence=confidence,
         chunks_found=len(search_results)

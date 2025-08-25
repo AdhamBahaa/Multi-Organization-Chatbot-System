@@ -709,4 +709,63 @@ export const debugOrganizationDocuments = async () => {
   }
 };
 
+// Feedback API
+export const submitFeedback = async (feedbackData) => {
+  try {
+    const response = await api.post("/feedback/submit", feedbackData);
+    return response.data;
+  } catch (error) {
+    console.error(
+      "Submit feedback error:",
+      error.response?.data?.detail || error.message
+    );
+    throw new Error(
+      error.response?.data?.detail || "Failed to submit feedback"
+    );
+  }
+};
+
+export const getMyFeedback = async () => {
+  try {
+    const response = await api.get("/feedback/my-feedback");
+    return response.data;
+  } catch (error) {
+    console.error(
+      "Get my feedback error:",
+      error.response?.data?.detail || error.message
+    );
+    throw new Error(error.response?.data?.detail || "Failed to get feedback");
+  }
+};
+
+export const getUsersFeedback = async () => {
+  try {
+    const response = await api.get("/feedback/admin/users-feedback");
+    return response.data;
+  } catch (error) {
+    console.error(
+      "Get users feedback error:",
+      error.response?.data?.detail || error.message
+    );
+    throw new Error(
+      error.response?.data?.detail || "Failed to get users feedback"
+    );
+  }
+};
+
+export const getFeedbackStats = async () => {
+  try {
+    const response = await api.get("/feedback/admin/feedback-stats");
+    return response.data;
+  } catch (error) {
+    console.error(
+      "Get feedback stats error:",
+      error.response?.data?.detail || error.message
+    );
+    throw new Error(
+      error.response?.data?.detail || "Failed to get feedback statistics"
+    );
+  }
+};
+
 export default api;

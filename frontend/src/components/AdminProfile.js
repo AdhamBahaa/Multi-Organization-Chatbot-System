@@ -122,6 +122,20 @@ const AdminProfile = ({ admin, onUpdate }) => {
     setSuccess("");
   };
 
+  // Add null checking for admin
+  if (!admin) {
+    return (
+      <div className="admin-profile">
+        <div className="profile-header">
+          <h2>Admin Profile</h2>
+        </div>
+        <div className="profile-info">
+          <p>Loading admin information...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="admin-profile">
       <div className="profile-header">
