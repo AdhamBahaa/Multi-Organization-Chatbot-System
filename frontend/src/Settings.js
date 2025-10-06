@@ -171,7 +171,8 @@ function Settings() {
             setGraphActionMsg(`Reindex failed: ${s.error || "Unknown error"}`);
           } else {
             setGraphActionMsg(
-              `Reindex ${s.state}... ${s.indexed ?? 0} document(s) processed`);
+              `Reindex ${s.state}... ${s.indexed ?? 0} document(s) processed`
+            );
             setTimeout(poll, 2000);
           }
         } catch (e) {
@@ -404,8 +405,8 @@ function Settings() {
                 </div>
                 <div style={{ fontSize: 12, color: "#6b7280" }}>
                   Text:{" "}
-                  {doc.has_extracted_text ? "✅ Extracted" : "❌ Not extracted"} •
-                  Length: {doc.text_length} chars • Chunks: {doc.chunk_count}
+                  {doc.has_extracted_text ? "✅ Extracted" : "❌ Not extracted"}{" "}
+                  • Length: {doc.text_length} chars • Chunks: {doc.chunk_count}
                 </div>
 
                 {/* Graph summary */}
@@ -484,7 +485,9 @@ function Settings() {
                       }}
                     >
                       <option value="docling">Docling</option>
-                      <option value="docling-hierarchical">Docling Hierarchical</option>
+                      <option value="docling-hierarchical">
+                        Docling Hierarchical
+                      </option>
                       <option value="simple">Simple</option>
                     </select>
                   </div>
@@ -526,8 +529,8 @@ function Settings() {
                                 }}
                               >
                                 Used Engine:{" "}
-                                {data.used_engine || data.engine || engine} • Chunks:{" "}
-                                {data.chunk_count}
+                                {data.used_engine || data.engine || engine} •
+                                Chunks: {data.chunk_count}
                               </div>
                               <div
                                 style={{

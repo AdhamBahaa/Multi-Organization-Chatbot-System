@@ -660,7 +660,9 @@ export const getSessionHistory = async (sessionId) => {
     const response = await api.get(`/sessions/${sessionId}`);
     return response.data;
   } catch (error) {
-    throw new Error(extractErrorMessage(error, "Failed to load session history"));
+    throw new Error(
+      extractErrorMessage(error, "Failed to load session history")
+    );
   }
 };
 
@@ -721,7 +723,8 @@ export const deleteDocument = async (documentId) => {
 // Documents: chunks viewer
 export const getDocumentChunks = async (documentId, engine = "docling") => {
   try {
-    const timeout = engine && String(engine).startsWith("docling") ? 120000 : 30000;
+    const timeout =
+      engine && String(engine).startsWith("docling") ? 120000 : 30000;
     const response = await api.get(`/documents/${documentId}/chunks`, {
       params: { engine },
       timeout,
@@ -738,7 +741,9 @@ export const getUsersFeedback = async () => {
     const response = await api.get("/feedback/admin/users-feedback");
     return response.data;
   } catch (error) {
-    throw new Error(extractErrorMessage(error, "Failed to load users' feedback"));
+    throw new Error(
+      extractErrorMessage(error, "Failed to load users' feedback")
+    );
   }
 };
 
@@ -747,7 +752,9 @@ export const getFeedbackStats = async () => {
     const response = await api.get("/feedback/admin/feedback-stats");
     return response.data;
   } catch (error) {
-    throw new Error(extractErrorMessage(error, "Failed to load feedback stats"));
+    throw new Error(
+      extractErrorMessage(error, "Failed to load feedback stats")
+    );
   }
 };
 
@@ -802,7 +809,9 @@ export const getGraphHealth = async () => {
 export const reindexGraph = async () => {
   try {
     // Reindex can be heavy; allow up to 5 minutes
-    const response = await api.post("/graph/reindex", null, { timeout: 300000 });
+    const response = await api.post("/graph/reindex", null, {
+      timeout: 300000,
+    });
     return response.data;
   } catch (error) {
     throw new Error(extractErrorMessage(error, "Failed to reindex graph"));
@@ -812,16 +821,22 @@ export const reindexGraph = async () => {
 // Background reindex API
 export const startGraphReindexBackground = async () => {
   try {
-    const response = await api.post("/graph/reindex/background", null, { timeout: 15000 });
+    const response = await api.post("/graph/reindex/background", null, {
+      timeout: 15000,
+    });
     return response.data; // { job_id, state }
   } catch (error) {
-    throw new Error(extractErrorMessage(error, "Failed to start background reindex"));
+    throw new Error(
+      extractErrorMessage(error, "Failed to start background reindex")
+    );
   }
 };
 
 export const getGraphReindexStatus = async (jobId) => {
   try {
-    const response = await api.get(`/graph/reindex/status/${jobId}`, { timeout: 15000 });
+    const response = await api.get(`/graph/reindex/status/${jobId}`, {
+      timeout: 15000,
+    });
     return response.data; // { state, indexed, ... }
   } catch (error) {
     throw new Error(extractErrorMessage(error, "Failed to get reindex status"));
@@ -831,7 +846,9 @@ export const getGraphReindexStatus = async (jobId) => {
 export const getGraphDocumentSummary = async (documentId) => {
   try {
     // Summary may run aggregations; allow more time than default
-    const response = await api.get(`/graph/document/${documentId}/summary`, { timeout: 60000 });
+    const response = await api.get(`/graph/document/${documentId}/summary`, {
+      timeout: 60000,
+    });
     return response.data;
   } catch (error) {
     throw new Error(extractErrorMessage(error, "Failed to get graph summary"));
