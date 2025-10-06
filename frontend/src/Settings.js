@@ -108,7 +108,10 @@ function Settings() {
   const changeEngine = async (docId, newEngine) => {
     setEngineChoice((p) => ({ ...p, [docId]: newEngine }));
     // If the panel is open and we don't have cache for the new engine, fetch it
-    if (openChunks[docId] && !(chunksCache[docId] && chunksCache[docId][newEngine])) {
+    if (
+      openChunks[docId] &&
+      !(chunksCache[docId] && chunksCache[docId][newEngine])
+    ) {
       setChunksLoading((p) => ({ ...p, [docId]: true }));
       try {
         const data = await getDocumentChunks(docId, newEngine);
@@ -192,10 +195,14 @@ function Settings() {
               <h4 style={{ margin: "0 0 10px 0", color: "#374151" }}>
                 AI Service
               </h4>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "10px" }}
+              >
                 <div
                   style={{
-                    ...getStatusColor(stats.ai_configured ? "healthy" : "error"),
+                    ...getStatusColor(
+                      stats.ai_configured ? "healthy" : "error"
+                    ),
                     padding: "4px 8px",
                     borderRadius: "4px",
                     fontSize: "12px",
@@ -222,7 +229,9 @@ function Settings() {
               <h4 style={{ margin: "0 0 10px 0", color: "#374151" }}>
                 Vector Database
               </h4>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "10px" }}
+              >
                 <div
                   style={{
                     ...getStatusColor(stats.vector_db_status),
@@ -359,9 +368,19 @@ function Settings() {
                         fontSize: "12px",
                       }}
                     >
-                      {openChunks[doc.id] ? "Hide chunks" : "View chunks (Docling)"}
+                      {openChunks[doc.id]
+                        ? "Hide chunks"
+                        : "View chunks (Docling)"}
                     </button>
-                    <span style={{ marginLeft: "10px", fontSize: "12px", color: "#475569" }}>Engine: </span>
+                    <span
+                      style={{
+                        marginLeft: "10px",
+                        fontSize: "12px",
+                        color: "#475569",
+                      }}
+                    >
+                      Engine:{" "}
+                    </span>
                     <select
                       value={engineChoice[doc.id] || "docling"}
                       onChange={(e) => changeEngine(doc.id, e.target.value)}
@@ -374,7 +393,7 @@ function Settings() {
                       }}
                     >
                       <option value="docling">Docling</option>
-                      <option value="docling-hybrid">Docling Hybrid</option>
+                      <option value="docling-hierarchical">Docling Hierarchical</option>
                       <option value="simple">Simple</option>
                     </select>
                   </div>
@@ -393,20 +412,60 @@ function Settings() {
                     }}
                   >
                     {/* Show which engine was actually used */}
-                    {chunksCache[doc.id] && chunksCache[doc.id][engineChoice[doc.id] || "docling"] && (
-                      <div style={{ fontSize: "12px", color: "#475569", marginBottom: "6px" }}>
-                        <strong>Used Engine:</strong> {chunksCache[doc.id][engineChoice[doc.id] || "docling"].used_engine}
-                      </div>
-                    )}
+                    {chunksCache[doc.id] &&
+                      chunksCache[doc.id][
+                        engineChoice[doc.id] || "docling"
+                      ] && (
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: "#475569",
+                            marginBottom: "6px",
+                          }}
+                        >
+                          <strong>Used Engine:</strong>{" "}
+                          {
+                            chunksCache[doc.id][
+                              engineChoice[doc.id] || "docling"
+                            ].used_engine
+                          }
+                        </div>
+                      )}
                     {/* Show debug info from backend to explain fallbacks */}
-                    {chunksCache[doc.id] && chunksCache[doc.id][engineChoice[doc.id] || "docling"]?.debug && (
-                      <details style={{ marginBottom: "8px" }}>
-                        <summary style={{ cursor: "pointer", fontSize: "12px", color: "#64748b" }}>Debug details</summary>
-                        <pre style={{ whiteSpace: "pre-wrap", fontSize: "11px", color: "#475569", marginTop: "6px", background: "#e2e8f0", padding: "8px", borderRadius: "4px" }}>
-                          {JSON.stringify(chunksCache[doc.id][engineChoice[doc.id] || "docling"].debug, null, 2)}
-                        </pre>
-                      </details>
-                    )}
+                    {chunksCache[doc.id] &&
+                      chunksCache[doc.id][engineChoice[doc.id] || "docling"]
+                        ?.debug && (
+                        <details style={{ marginBottom: "8px" }}>
+                          <summary
+                            style={{
+                              cursor: "pointer",
+                              fontSize: "12px",
+                              color: "#64748b",
+                            }}
+                          >
+                            Debug details
+                          </summary>
+                          <pre
+                            style={{
+                              whiteSpace: "pre-wrap",
+                              fontSize: "11px",
+                              color: "#475569",
+                              marginTop: "6px",
+                              background: "#e2e8f0",
+                              padding: "8px",
+                              borderRadius: "4px",
+                            }}
+                          >
+                            {JSON.stringify(
+                              chunksCache[doc.id][
+                                engineChoice[doc.id] || "docling"
+                              ].debug,
+                              null,
+                              2
+                            )}
+                          </pre>
+                        </details>
+                      )}
                     {chunksLoading[doc.id] ? (
                       <div style={{ fontSize: "12px", color: "#64748b" }}>
                         Loading chunks...
@@ -417,8 +476,17 @@ function Settings() {
                       </div>
                     ) : (
                       <ol style={{ margin: 0, paddingLeft: "18px" }}>
-                        {((chunksCache[doc.id] && chunksCache[doc.id][engineChoice[doc.id] || "docling"]?.chunks) || []).map((c, i) => (
-                          <li key={i} style={{ marginBottom: "6px", fontSize: "12px" }}>
+                        {(
+                          (chunksCache[doc.id] &&
+                            chunksCache[doc.id][
+                              engineChoice[doc.id] || "docling"
+                            ]?.chunks) ||
+                          []
+                        ).map((c, i) => (
+                          <li
+                            key={i}
+                            style={{ marginBottom: "6px", fontSize: "12px" }}
+                          >
                             {c}
                           </li>
                         ))}

@@ -113,7 +113,10 @@ const PasswordSetup = () => {
               placeholder="Enter your new password"
               minLength={8}
             />
-            <small>Password must be at least 8 characters and include upper & lower case letters, a number, and a special character.</small>
+            <small>
+              Password must be at least 8 characters and include upper & lower
+              case letters, a number, and a special character.
+            </small>
           </div>
 
           <div className="form-group">

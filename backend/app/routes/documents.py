@@ -9,6 +9,7 @@ from ..auth import get_current_user
 from ..documents import get_all_documents, get_documents_by_organization, upload_document, delete_document, get_organization_stats
 from ..models import DocumentResponse, SystemStatsResponse
 from ..document_store import document_store
+from ..config import USE_VECTOR_DB
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -168,6 +169,71 @@ async def debug_organization_documents(
         )
 
 
+@router.post("/reindex")
+async def reindex_documents(
+    current_user: Union[Admin, User] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """(Re)index all documents for the current user's organization into the vector DB.
+
+    - Deletes existing embeddings per document to avoid duplicates
+    - Adds fresh embeddings using the current Docling/simple pipeline in vector_db
+    """
+    if not USE_VECTOR_DB:
+        raise HTTPException(status_code=400, detail="Vector DB is disabled by configuration")
+
+    try:
+        # Determine organization
+        organization_id = current_user.OrganizationID
+
+        # Collect documents for this org
+        org_docs = document_store.get_documents_by_organization(organization_id)
+        if not org_docs:
+            return {"message": "No documents to index", "indexed": 0, "skipped": 0}
+
+        from ..vector_db import vector_db
+        indexed = 0
+        skipped = 0
+        for doc in org_docs:
+            doc_id = doc.get("id")
+            text = doc.get("extracted_text") or ""
+            if not doc_id or not text:
+                skipped += 1
+                continue
+
+            # Remove previous embeddings for this doc
+            try:
+                vector_db.delete_document(doc_id)
+            except Exception:
+                pass
+
+            # Add fresh embeddings
+            metadata = {
+                "document_id": doc_id,
+                "filename": doc.get("filename", ""),
+                "file_type": doc.get("file_type", ""),
+                "file_size": doc.get("file_size", 0),
+                "uploaded_at": doc.get("uploaded_at", 0),
+                "organization_id": organization_id,
+            }
+            ok = vector_db.add_document(doc_id, text, metadata)
+            if ok:
+                indexed += 1
+            else:
+                skipped += 1
+
+        return {
+            "message": "Reindex completed",
+            "indexed": indexed,
+            "skipped": skipped,
+            "organization_id": organization_id,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Reindex failed: {str(e)}")
+
+
 @router.get("/{document_id}/chunks")
 async def get_document_chunks(
     document_id: str,
@@ -188,12 +254,35 @@ async def get_document_chunks(
 
         extracted_text = doc.get("extracted_text") or ""
         if not extracted_text:
+            # Attempt to recover text from the stored file on disk after a restart
+            try:
+                import os
+                file_path = doc.get("file_path", "")
+                content_type = doc.get("file_type", "")
+                filename = doc.get("filename", "")
+                if file_path and os.path.exists(file_path):
+                    with open(file_path, "rb") as f:
+                        content = f.read()
+                    from ..utils import extract_text_from_file
+                    recovered = extract_text_from_file(content, content_type, filename) or ""
+                    # If extractor returned a descriptive placeholder, treat as empty
+                    if recovered and not recovered.lower().startswith(("file uploaded", "pdf file uploaded", "word document uploaded")):
+                        extracted_text = recovered
+                        # Persist the recovered text back into the registry
+                        try:
+                            doc["extracted_text"] = extracted_text
+                            document_store.add_document(document_id, doc)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+        if not extracted_text:
             return {"document_id": document_id, "engine": engine, "chunks": [], "chunk_count": 0}
 
         # Choose engine
         chunks = []
         used_engine = engine
-        if engine in ("docling", "docling-hybrid"):
+        if engine in ("docling", "docling-hybrid", "docling-hierarchical"):
             try:
                 from ..docling_chunker import (
                     chunk_text_with_docling_with_debug_info,
@@ -202,8 +291,8 @@ async def get_document_chunks(
                 )
                 # Pass both pdf_path and text to the docling chunker (correct signature)
                 pdf_path = doc.get("file_path", "")
-                # Pass prefer_hybrid override when engine=docling-hybrid
-                prefer_hybrid = True if engine == "docling-hybrid" else None
+                # Pass prefer_hybrid override when engine=docling-hybrid or docling-hierarchical
+                prefer_hybrid = True if engine == "docling-hybrid" else (False if engine == "docling-hierarchical" else None)
                 chunks, used_engine, debug_info = chunk_text_with_docling_with_debug_info(
                     pdf_path=pdf_path, text=extracted_text, max_chunk_size=1000, prefer_hybrid=prefer_hybrid
                 )

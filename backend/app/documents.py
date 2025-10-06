@@ -64,7 +64,7 @@ async def upload_document(file: UploadFile = File(...), organization_id: int = N
             "organization_id": organization_id  # Add organization ID
         }
         
-        # Add to persistent document store
+        # Add to persistent document store (initial save)
         document_store.add_document(doc_id, doc_data)
         
         # Chunk the document with the selected engine
@@ -123,6 +123,12 @@ async def upload_document(file: UploadFile = File(...), organization_id: int = N
                 except Exception as e:
                     print(f"⚠️ Graph DB write skipped due to error: {e}")
         
+        # Persist final state (ensure chunk_count and any later updates are saved)
+        try:
+            document_store.add_document(doc_id, doc_data)
+        except Exception:
+            pass
+
         return doc_data
         
     except Exception as e:
