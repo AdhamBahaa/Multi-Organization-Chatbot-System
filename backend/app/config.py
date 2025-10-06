@@ -69,6 +69,24 @@ DEV_MODE = "shared"  # Always shared mode for team collaboration
 # Upload Directory (shared development only)
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'shared_uploads')
 
+# Chunking/Vector configuration
+# Use 'docling' to enable Docling-based advanced chunking
+CHUNKING_ENGINE = os.getenv("CHUNKING_ENGINE", "docling")  # options: 'docling', 'chroma'
+# When False, vector DB (Chroma) remains present but is not used
+USE_VECTOR_DB = os.getenv("USE_VECTOR_DB", "false").lower() in ("1", "true", "yes")
+
+# Docling behavior tuning
+# Prefer converting already-extracted text into Docling MD instead of re-parsing the PDF (much faster, avoids heavy model downloads)
+DOCLING_PREFER_TEXT = os.getenv("DOCLING_PREFER_TEXT", "true").lower() in ("1", "true", "yes")
+# Choose chunker: 'hierarchical' (fast, structure-aware) or 'hybrid' (token-aware, slower and may download extra models)
+DOCLING_CHUNKER_MODE = os.getenv("DOCLING_CHUNKER_MODE", "hierarchical").lower()
+
+# Graph Database configuration
+USE_GRAPH_DB = os.getenv("USE_GRAPH_DB", "false").lower() in ("1", "true", "yes")
+GRAPH_DB_URI = os.getenv("GRAPH_DB_URI", "bolt://localhost:7687")
+GRAPH_DB_USER = os.getenv("GRAPH_DB_USER", "neo4j")
+GRAPH_DB_PASSWORD = os.getenv("GRAPH_DB_PASSWORD", "password")
+
 # Demo Users (for development only)
 DEMO_USERS = {
     "admin": {"id": 1, "username": "admin", "password": "admin123", "role": "admin"},

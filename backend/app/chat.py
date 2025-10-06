@@ -121,7 +121,7 @@ async def generate_chat_response(chat_data: ChatRequest, organization_id: int = 
         if result['chunks']:
             print(f"    Sample chunk: {result['chunks'][0][:100]}...")
     
-    # Prepare context from documents
+    # Prepare context from documents (vector chunks + optional graph expansion)
     document_context = ""
     sources = []
     
@@ -137,6 +137,10 @@ async def generate_chat_response(chat_data: ChatRequest, organization_id: int = 
                 for chunk in result['chunks']:
                     if chunk.strip():
                         document_context += f"- {chunk.strip()}\n"
+                # Attach optional graph context if present
+                graph_ctx = result.get('graph_context')
+                if graph_ctx:
+                    document_context += f"(Graph context) {graph_ctx}\n"
                 
                 relevant_sources.append({
                     "document_id": result['document_id'],
@@ -153,7 +157,7 @@ async def generate_chat_response(chat_data: ChatRequest, organization_id: int = 
     # Generate response using Gemini with enhanced English/Arabic language prompt
     try:
         if API_KEY:
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            model = genai.GenerativeModel("gemini-2.0-flash")
             
             # Create English or Arabic language-specific prompt
             prompt = create_multilingual_prompt(chat_data.message, document_context, detected_language)

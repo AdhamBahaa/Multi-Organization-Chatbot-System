@@ -133,7 +133,7 @@ function Chat({ user }) {
   };
 
   // Silence detection configuration
-  const SILENCE_TIMEOUT = 2000; // Stop recording after 2 seconds of silence
+  const SILENCE_TIMEOUT = 5000; // Stop recording after 5 seconds of silence
   const SILENCE_CHECK_INTERVAL = 500; // Check for silence every 500ms
 
   const startSilenceDetection = () => {
@@ -699,7 +699,7 @@ function Chat({ user }) {
               <div className="message-content">
                 <div className="message-text">{message.content}</div>
 
-                {/* Sources Section */}
+                {/* Sources Section
                 {message.sources && message.sources.length > 0 && (
                   <div className="message-sources">
                     <div className="sources-header">
@@ -727,7 +727,7 @@ function Chat({ user }) {
                       ))}
                     </div>
                   </div>
-                )}
+                )} */}
 
                 {/* Feedback Section - Only for bot responses and only for Users (not Admins) */}
                 {message.role === "assistant" &&
@@ -762,7 +762,7 @@ function Chat({ user }) {
                     {formatTime(message.timestamp)}
                   </span>
 
-                  {message.confidence !== undefined && (
+                  {/* {message.confidence !== undefined && (
                     <div
                       className={`confidence-badge confidence-${getConfidenceColor(
                         message.confidence
@@ -776,7 +776,7 @@ function Chat({ user }) {
                     <div className="chunks-info">
                       📊 {message.chunks_found} relevant chunks found
                     </div>
-                  )}
+                  )} */}
                 </div>
               </div>
             </div>

@@ -20,8 +20,8 @@ const PasswordSetup = () => {
     setError("");
 
     // Validate passwords
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters long");
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters long");
       return;
     }
 
@@ -111,9 +111,9 @@ const PasswordSetup = () => {
               onChange={(e) => setPassword(e.target.value)}
               required
               placeholder="Enter your new password"
-              minLength={6}
+              minLength={8}
             />
-            <small>Password must be at least 6 characters long</small>
+            <small>Password must be at least 8 characters and include upper & lower case letters, a number, and a special character.</small>
           </div>
 
           <div className="form-group">

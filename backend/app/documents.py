@@ -10,6 +10,10 @@ from .utils import (
     generate_document_id, 
     save_file_to_disk
 )
+from .config import CHUNKING_ENGINE, USE_VECTOR_DB, USE_GRAPH_DB
+from .docling_chunker import chunk_text_with_docling
+from .graph_db import graph_client
+from .entity_extraction import extract_entities
 from .document_store import document_store
 from .config import ALLOWED_FILE_TYPES, BLOCKED_FILE_TYPES, API_KEY
 
@@ -52,7 +56,8 @@ async def upload_document(file: UploadFile = File(...), organization_id: int = N
             "file_size": len(content),
             "file_path": file_path,
             "processed": True,
-            "chunk_count": max(1, len(extracted_text) // 1000),  # Rough estimate
+            # chunk_count is derived from the selected chunking engine
+            "chunk_count": 0,
             "content_preview": extracted_text[:200] if extracted_text else f"Uploaded {file.content_type} file",
             "extracted_text": extracted_text,  # Store full extracted text for search
             "uploaded_at": time.time(),
@@ -62,18 +67,61 @@ async def upload_document(file: UploadFile = File(...), organization_id: int = N
         # Add to persistent document store
         document_store.add_document(doc_id, doc_data)
         
-        # Add to vector database for semantic search
+        # Chunk the document with the selected engine
         if extracted_text:
-            from .vector_db import vector_db
-            vector_metadata = {
-                "document_id": doc_id,
-                "filename": file.filename,
-                "file_type": file.content_type,
-                "file_size": len(content),
-                "uploaded_at": time.time(),
-                "organization_id": organization_id  # Add organization ID to vector metadata
-            }
-            vector_db.add_document(doc_id, extracted_text, vector_metadata)
+            if CHUNKING_ENGINE == "docling":
+                chunks, used_engine = chunk_text_with_docling(file_path, extracted_text, max_chunk_size=1000)
+                print(f"🧠 Chunking for '{file.filename}' done with engine: {used_engine}")
+            else:
+                # Fallback to previous simple sentence chunking alignment with vector_db
+                from .vector_db import VectorDatabase
+                chunks = VectorDatabase()._split_text_into_chunks(extracted_text, max_chunk_size=1000)
+            doc_data["chunk_count"] = len(chunks)
+
+            # Optionally index into vector DB (kept but gated)
+            if USE_VECTOR_DB:
+                try:
+                    from .vector_db import vector_db
+                    vector_metadata = {
+                        "document_id": doc_id,
+                        "filename": file.filename,
+                        "file_type": file.content_type,
+                        "file_size": len(content),
+                        "uploaded_at": time.time(),
+                        "organization_id": organization_id
+                    }
+                    vector_db.add_document(doc_id, extracted_text, vector_metadata)
+                except Exception as e:
+                    print(f"⚠️ Skipping vector DB indexing due to error: {e}")
+
+            # Optionally write to graph DB
+            if USE_GRAPH_DB:
+                try:
+                    # Upsert document
+                    graph_client.upsert_document(doc_id, file.filename)
+                    # Upsert chunks and relationships
+                    for idx, chunk_text in enumerate(chunks):
+                        chunk_id = f"{doc_id}_chunk_{idx}"
+                        graph_client.upsert_chunk(doc_id, chunk_id, chunk_text, idx)
+                        graph_client.relate_document_chunk(doc_id, chunk_id)
+                        # Extract entities per chunk
+                        entities_in_chunk = []
+                        for ent_type, ent_name in extract_entities(chunk_text):
+                            eid = graph_client.upsert_entity(ent_type, ent_name)
+                            if eid:
+                                entities_in_chunk.append((eid, ent_type, ent_name))
+                                graph_client.relate_chunk_entity(chunk_id, eid)
+                        # Create simple co-occurrence relationships among entities in the same chunk
+                        try:
+                            for i in range(len(entities_in_chunk)):
+                                for j in range(i + 1, len(entities_in_chunk)):
+                                    src_id, _, _ = entities_in_chunk[i]
+                                    tgt_id, _, _ = entities_in_chunk[j]
+                                    graph_client.relate_entity_entity(src_id, "CO_OCCURS_WITH", tgt_id)
+                        except Exception:
+                            pass
+                except Exception as e:
+                    print(f"⚠️ Graph DB write skipped due to error: {e}")
         
         return doc_data
         

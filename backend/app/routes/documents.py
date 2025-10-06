@@ -166,3 +166,73 @@ async def debug_organization_documents(
             status_code=500,
             detail=f"Debug failed: {str(e)}"
         )
+
+
+@router.get("/{document_id}/chunks")
+async def get_document_chunks(
+    document_id: str,
+    engine: str = "docling",
+    current_user: Union[Admin, User] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Return chunks for a given document using the selected chunking engine (default: docling)."""
+    try:
+        # Ensure document exists and belongs to user's organization
+        doc = document_store.get_document(document_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        user_org_id = current_user.OrganizationID
+        if doc.get("organization_id") != user_org_id:
+            raise HTTPException(status_code=403, detail="Access denied: Document belongs to different organization")
+
+        extracted_text = doc.get("extracted_text") or ""
+        if not extracted_text:
+            return {"document_id": document_id, "engine": engine, "chunks": [], "chunk_count": 0}
+
+        # Choose engine
+        chunks = []
+        used_engine = engine
+        if engine in ("docling", "docling-hybrid"):
+            try:
+                from ..docling_chunker import (
+                    chunk_text_with_docling_with_debug_info,
+                    chunk_text_with_docling_debug,
+                    simple_sentence_chunk,
+                )
+                # Pass both pdf_path and text to the docling chunker (correct signature)
+                pdf_path = doc.get("file_path", "")
+                # Pass prefer_hybrid override when engine=docling-hybrid
+                prefer_hybrid = True if engine == "docling-hybrid" else None
+                chunks, used_engine, debug_info = chunk_text_with_docling_with_debug_info(
+                    pdf_path=pdf_path, text=extracted_text, max_chunk_size=1000, prefer_hybrid=prefer_hybrid
+                )
+            except Exception as e:
+                # Route-level log to help diagnose silent fallback
+                print(f"[chunks-route] Docling failed, falling back to simple. Error: {e}")
+                from ..docling_chunker import simple_sentence_chunk
+                chunks = simple_sentence_chunk(extracted_text, max_chunk_size=1000)
+                used_engine = "simple"
+                debug_info = {"error": str(e)}
+        else:
+            from ..docling_chunker import simple_sentence_chunk
+            chunks = simple_sentence_chunk(extracted_text, max_chunk_size=1000)
+            used_engine = "simple"
+            debug_info = {"note": "simple engine selected"}
+
+        resp = {
+            "document_id": document_id,
+            "engine": engine,
+            "used_engine": used_engine,
+            "chunk_count": len(chunks),
+            "chunks": chunks,
+            "filename": doc.get("filename"),
+            "debug": debug_info,
+        }
+        # Route-level log for visibility
+        print(f"[chunks-route] document_id={document_id} requested_engine={engine} used_engine={used_engine} chunks={len(chunks)}")
+        return resp
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get chunks: {str(e)}")

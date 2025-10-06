@@ -252,35 +252,45 @@ export const login = async (email, password) => {
     const response = await api.post("/auth/login", { email, password });
     const data = response.data;
 
+    // Debug logging
+    console.log("Login API Response:", data);
+    console.log("Organization Role:", data.organization_role);
+    console.log("System Role:", data.role);
+
     // Store token and user info
+    const userData = {
+      id: data.user_id,
+      email: data.email,
+      full_name: data.full_name,
+      role: data.role,
+      organization_role: data.organization_role,
+      organization_id: data.organization_id,
+      admin_id: data.admin_id,
+    };
+
+    console.log("Storing user data:", userData);
+
     localStorage.setItem("token", data.access_token);
-    localStorage.setItem(
-      "user",
-      JSON.stringify({
-        id: data.user_id,
-        email: data.email,
-        full_name: data.full_name,
-        role: data.role,
-        organization_role: data.organization_role,
-        organization_id: data.organization_id,
-        admin_id: data.admin_id,
-      })
-    );
+    localStorage.setItem("user", JSON.stringify(userData));
 
     // Add session refresh listeners after successful login
     addSessionRefreshListeners();
 
+    const userObject = {
+      id: data.user_id,
+      email: data.email,
+      full_name: data.full_name,
+      role: data.role,
+      organization_role: data.organization_role,
+      organization_id: data.organization_id,
+      admin_id: data.admin_id,
+    };
+
+    console.log("Returning user object:", userObject);
+
     return {
       token: data.access_token,
-      user: {
-        id: data.user_id,
-        email: data.email,
-        full_name: data.full_name,
-        role: data.role,
-        organization_role: data.organization_role,
-        organization_id: data.organization_id,
-        admin_id: data.admin_id,
-      },
+      user: userObject,
     };
   } catch (error) {
     console.error(
@@ -706,6 +716,23 @@ export const debugOrganizationDocuments = async () => {
   } catch (error) {
     console.error("Debug organization error:", error);
     return null;
+  }
+};
+
+export const getDocumentChunks = async (documentId, engine = "docling") => {
+  try {
+    const response = await api.get(`/documents/${documentId}/chunks`, {
+      params: { engine },
+      // Docling variants can take longer on first run while downloading models
+      timeout: engine.startsWith("docling") ? 120000 : undefined,
+    });
+    return response.data;
+  } catch (error) {
+    console.error(
+      "Get chunks error:",
+      error.response?.data?.detail || error.message
+    );
+    throw new Error(error.response?.data?.detail || "Failed to get chunks");
   }
 };
 

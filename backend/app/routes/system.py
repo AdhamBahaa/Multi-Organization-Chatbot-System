@@ -49,6 +49,31 @@ async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "message": "System is running"}
 
+@router.get("/docling-status")
+async def docling_status():
+    """Report Docling availability and run a tiny sample to show which engine was used."""
+    sample = "Heading: Introduction. This is the first paragraph. This is the second sentence."
+    try:
+        from ..docling_chunker import chunk_text_with_docling_debug
+        # No PDF path here, force text-only mode
+        chunks, used_engine = chunk_text_with_docling_debug(pdf_path="", text=sample, max_chunk_size=80)
+        print(f"[docling-status] used_engine={used_engine} sample_chunks={len(chunks)}")
+        return {
+            "docling_importable": True,
+            "used_engine_on_sample": used_engine,
+            "sample_chunk_count": len(chunks),
+            "sample_chunks": chunks,
+        }
+    except Exception as e:
+        print(f"[docling-status] Docling import/use failed: {e}")
+        # If import fails, docling isn't available; simple chunker will be used elsewhere
+        return {
+            "docling_importable": False,
+            "used_engine_on_sample": "simple",
+            "sample_chunk_count": 0,
+            "sample_chunks": [],
+        }
+
 @router.get("/debug/documents")
 async def debug_documents():
     """Debug endpoint to check document store and vector database"""
