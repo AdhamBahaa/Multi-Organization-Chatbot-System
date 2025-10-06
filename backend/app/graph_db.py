@@ -5,6 +5,8 @@ from typing import List, Dict, Optional
 from .config import USE_GRAPH_DB, GRAPH_DB_URI, GRAPH_DB_USER, GRAPH_DB_PASSWORD
 
 class NoOpGraphClient:
+    def health(self) -> Dict:
+        return {"enabled": False, "status": "disabled"}
     def upsert_document(self, doc_id: str, filename: str):
         pass
     def upsert_chunk(self, doc_id: str, chunk_id: str, text: str, index: int):
@@ -17,6 +19,10 @@ class NoOpGraphClient:
         pass
     def relate_entity_entity(self, source_id: str, relation: str, target_id: str):
         pass
+    def delete_document(self, doc_id: str):
+        pass
+    def get_document_summary(self, doc_id: str) -> Dict:
+        return {"document_id": doc_id, "chunks": 0, "entities": 0}
     def expand_related_for_chunks(self, chunk_ids: List[str], max_neighbors: int = 5) -> List[Dict]:
         return []
 
@@ -26,10 +32,24 @@ try:
 
         class Neo4jGraphClient:
             def __init__(self, uri: str, user: str, password: str):
-                self.driver = GraphDatabase.driver(uri, auth=(user, password))
+                # Use a short connection timeout so bad routing/connection fails fast instead of hanging
+                # Note: prefer bolt:// for single-instance community servers. neo4j:// may attempt routing and hang.
+                self.driver = GraphDatabase.driver(
+                    uri,
+                    auth=(user, password),
+                    connection_timeout=10,
+                )
 
             def close(self):
                 self.driver.close()
+
+            def health(self) -> Dict:
+                try:
+                    with self.driver.session() as session:
+                        rec = session.run("RETURN 1 as ok").single()
+                        return {"enabled": True, "status": "ok", "ok": rec["ok"] == 1}
+                except Exception as e:
+                    return {"enabled": True, "status": "error", "error": str(e)}
 
             def upsert_document(self, doc_id: str, filename: str):
                 cypher = (
@@ -78,6 +98,78 @@ try:
                 with self.driver.session() as session:
                     session.run(cypher, sid=source_id, tid=target_id, relation=relation)
 
+            # Bulk helpers to reduce round-trips
+            def bulk_upsert_chunks(self, doc_id: str, items: List[Dict]):
+                """items: [{id, text, index}]"""
+                cypher = (
+                    "UNWIND $rows as row "
+                    "MERGE (c:Chunk {id: row.id}) SET c.text = row.text, c.index = row.index"
+                )
+                with self.driver.session() as session:
+                    session.run(cypher, rows=items)
+
+            def bulk_relate_document_chunks(self, doc_id: str, chunk_ids: List[str]):
+                cypher = (
+                    "MATCH (d:Document {id: $doc_id}) "
+                    "UNWIND $ids as cid "
+                    "MATCH (c:Chunk {id: cid}) "
+                    "MERGE (d)-[:HAS_CHUNK]->(c)"
+                )
+                with self.driver.session() as session:
+                    session.run(cypher, doc_id=doc_id, ids=chunk_ids)
+
+            def bulk_upsert_entities(self, items: List[Dict]):
+                """items: [{id, type, name}]"""
+                cypher = (
+                    "UNWIND $rows as row "
+                    "MERGE (e:Entity {id: row.id}) SET e.type = row.type, e.name = row.name"
+                )
+                with self.driver.session() as session:
+                    session.run(cypher, rows=items)
+
+            def bulk_relate_chunk_entities(self, items: List[Dict]):
+                """items: [{chunk_id, entity_id}]"""
+                cypher = (
+                    "UNWIND $rows as row "
+                    "MATCH (c:Chunk {id: row.chunk_id}), (e:Entity {id: row.entity_id}) "
+                    "MERGE (c)-[:MENTIONS]->(e)"
+                )
+                with self.driver.session() as session:
+                    session.run(cypher, rows=items)
+
+            def bulk_relate_entities(self, items: List[Dict]):
+                """items: [{sid, tid, relation}]"""
+                cypher = (
+                    "UNWIND $rows as row "
+                    "MATCH (s:Entity {id: row.sid}), (t:Entity {id: row.tid}) "
+                    "MERGE (s)-[:RELATED_TO {relation: row.relation}]->(t)"
+                )
+                with self.driver.session() as session:
+                    session.run(cypher, rows=items)
+
+            def delete_document(self, doc_id: str):
+                # Detach delete the document and its chunks; keep entities (they may be shared)
+                cypher = (
+                    "MATCH (d:Document {id: $doc_id})-[:HAS_CHUNK]->(c:Chunk) "
+                    "DETACH DELETE c "
+                )
+                cypher_doc = "MATCH (d:Document {id: $doc_id}) DETACH DELETE d"
+                with self.driver.session() as session:
+                    session.run(cypher, doc_id=doc_id)
+                    session.run(cypher_doc, doc_id=doc_id)
+
+            def get_document_summary(self, doc_id: str) -> Dict:
+                cypher = (
+                    "MATCH (d:Document {id: $doc_id})-[:HAS_CHUNK]->(c:Chunk) "
+                    "OPTIONAL MATCH (c)-[:MENTIONS]->(e:Entity) "
+                    "RETURN count(distinct c) as chunks, count(distinct e) as entities"
+                )
+                with self.driver.session() as session:
+                    rec = session.run(cypher, doc_id=doc_id).single()
+                    if rec:
+                        return {"document_id": doc_id, "chunks": rec["chunks"], "entities": rec["entities"]}
+                    return {"document_id": doc_id, "chunks": 0, "entities": 0}
+
             def expand_related_for_chunks(self, chunk_ids: List[str], max_neighbors: int = 5) -> List[Dict]:
                 cypher = (
                     "MATCH (c:Chunk)-[:MENTIONS]->(e:Entity) "
@@ -89,6 +181,20 @@ try:
                 with self.driver.session() as session:
                     result = session.run(cypher, chunk_ids=chunk_ids, k=max_neighbors)
                     return [record.data() for record in result]
+
+            def ensure_schema(self):
+                """Create helpful constraints if they don't already exist."""
+                stmts = [
+                    "CREATE CONSTRAINT doc_id IF NOT EXISTS FOR (d:Document) REQUIRE d.id IS UNIQUE",
+                    "CREATE CONSTRAINT chunk_id IF NOT EXISTS FOR (c:Chunk) REQUIRE c.id IS UNIQUE",
+                    "CREATE CONSTRAINT entity_id IF NOT EXISTS FOR (e:Entity) REQUIRE e.id IS UNIQUE",
+                ]
+                with self.driver.session() as session:
+                    for s in stmts:
+                        try:
+                            session.run(s)
+                        except Exception:
+                            pass
 
         graph_client = Neo4jGraphClient(GRAPH_DB_URI, GRAPH_DB_USER, GRAPH_DB_PASSWORD)
     else:

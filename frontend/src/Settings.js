@@ -5,6 +5,11 @@ import {
   getOrganizationStats,
   debugOrganizationDocuments,
   getDocumentChunks,
+  getGraphHealth,
+  reindexGraph,
+  startGraphReindexBackground,
+  getGraphReindexStatus,
+  getGraphDocumentSummary,
 } from "./api";
 
 function Settings() {
@@ -26,9 +31,23 @@ function Settings() {
   const [chunksCache, setChunksCache] = useState({});
   const [chunksLoading, setChunksLoading] = useState({});
   const [engineChoice, setEngineChoice] = useState({});
+  const [graphHealth, setGraphHealth] = useState(null);
+  const [graphLoading, setGraphLoading] = useState(false);
+  const [graphActionMsg, setGraphActionMsg] = useState("");
+  const [graphJob, setGraphJob] = useState(null);
+  const [docSummaries, setDocSummaries] = useState({});
 
   useEffect(() => {
     loadSystemData();
+    // Load graph health in parallel
+    (async () => {
+      try {
+        const h = await getGraphHealth();
+        setGraphHealth(h);
+      } catch (e) {
+        setGraphHealth({ enabled: false, status: "error", error: e.message });
+      }
+    })();
   }, []);
 
   const loadSystemData = async () => {
@@ -130,6 +149,56 @@ function Settings() {
     }
   };
 
+  const triggerGraphReindex = async () => {
+    setGraphLoading(true);
+    setGraphActionMsg("");
+    try {
+      // Prefer background job to avoid UI blocking
+      const start = await startGraphReindexBackground();
+      setGraphJob(start);
+      setGraphActionMsg(`Reindex started (job: ${start.job_id}).`);
+
+      // Poll status until done/error
+      const poll = async () => {
+        try {
+          const s = await getGraphReindexStatus(start.job_id);
+          setGraphJob(s);
+          if (s.state === "done") {
+            setGraphActionMsg(
+              `Reindex completed: indexed ${s.indexed ?? 0} document(s).`
+            );
+          } else if (s.state === "error") {
+            setGraphActionMsg(`Reindex failed: ${s.error || "Unknown error"}`);
+          } else {
+            setGraphActionMsg(
+              `Reindex ${s.state}... ${s.indexed ?? 0} document(s) processed`);
+            setTimeout(poll, 2000);
+          }
+        } catch (e) {
+          setGraphActionMsg(`Status error: ${e.message}`);
+        }
+      };
+      setTimeout(poll, 1500);
+    } catch (e) {
+      setGraphActionMsg(`Reindex failed: ${e.message}`);
+    } finally {
+      setGraphLoading(false);
+    }
+  };
+
+  const loadDocSummary = async (docId) => {
+    setDocSummaries((p) => ({ ...p, [docId]: { loading: true } }));
+    try {
+      const s = await getGraphDocumentSummary(docId);
+      setDocSummaries((p) => ({ ...p, [docId]: { ...s, loading: false } }));
+    } catch (e) {
+      setDocSummaries((p) => ({
+        ...p,
+        [docId]: { error: e.message, loading: false },
+      }));
+    }
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case "connected":
@@ -142,6 +211,21 @@ function Settings() {
         return { bg: "#fef3c7", color: "#92400e" };
     }
   };
+
+  const pill = (text, color) => (
+    <span
+      style={{
+        background: color || "#f1f5f9",
+        color: "#0f172a",
+        padding: "2px 8px",
+        borderRadius: 999,
+        fontSize: 12,
+        marginLeft: 6,
+      }}
+    >
+      {text}
+    </span>
+  );
 
   if (loading) {
     return (
@@ -173,85 +257,54 @@ function Settings() {
         </div>
       )}
 
-      {/* System Status (hidden per request) */}
-      {false && (
-        <div style={{ marginBottom: "30px" }}>
-          <h3>System Status</h3>
-          <div
+      {/* Graph DB Status */}
+      <div style={{ marginBottom: 20 }}>
+        <h3>Graph Database</h3>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ fontSize: 12, color: "#334155" }}>Status:</div>
+          {graphHealth ? (
+            <>
+              {pill(
+                graphHealth.status || (graphHealth.enabled ? "ok" : "disabled"),
+                graphHealth.status === "ok"
+                  ? "#dcfce7"
+                  : graphHealth.status === "error"
+                  ? "#fee2e2"
+                  : "#fde68a"
+              )}
+              {graphHealth.error && (
+                <span style={{ fontSize: 12, color: "#b91c1c" }}>
+                  {graphHealth.error}
+                </span>
+              )}
+            </>
+          ) : (
+            <span style={{ fontSize: 12, color: "#64748b" }}>Loading...</span>
+          )}
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <button
+            onClick={triggerGraphReindex}
+            disabled={graphLoading}
             style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "15px",
-              marginTop: "15px",
+              padding: "6px 10px",
+              backgroundColor: graphLoading ? "#93c5fd" : "#3b82f6",
+              color: "white",
+              border: "none",
+              borderRadius: 4,
+              cursor: graphLoading ? "default" : "pointer",
+              fontSize: 12,
             }}
           >
-            <div
-              style={{
-                padding: "15px",
-                backgroundColor: "#f9fafb",
-                borderRadius: "8px",
-              }}
-            >
-              <h4 style={{ margin: "0 0 10px 0", color: "#374151" }}>
-                AI Service
-              </h4>
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "10px" }}
-              >
-                <div
-                  style={{
-                    ...getStatusColor(
-                      stats.ai_configured ? "healthy" : "error"
-                    ),
-                    padding: "4px 8px",
-                    borderRadius: "4px",
-                    fontSize: "12px",
-                  }}
-                >
-                  {stats.ai_configured ? "✅ Configured" : "❌ Not Configured"}
-                </div>
-              </div>
-              <div
-                style={{ fontSize: "12px", color: "#6b7280", marginTop: "5px" }}
-              >
-                Google Gemini API:{" "}
-                {stats.ai_configured ? "Active" : "Missing API Key"}
-              </div>
+            {graphLoading ? "Reindexing..." : "Reindex Graph (Org)"}
+          </button>
+          {graphActionMsg && (
+            <div style={{ fontSize: 12, color: "#334155", marginTop: 6 }}>
+              {graphActionMsg}
             </div>
-
-            <div
-              style={{
-                padding: "15px",
-                backgroundColor: "#f9fafb",
-                borderRadius: "8px",
-              }}
-            >
-              <h4 style={{ margin: "0 0 10px 0", color: "#374151" }}>
-                Vector Database
-              </h4>
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "10px" }}
-              >
-                <div
-                  style={{
-                    ...getStatusColor(stats.vector_db_status),
-                    padding: "4px 8px",
-                    borderRadius: "4px",
-                    fontSize: "12px",
-                  }}
-                >
-                  {stats.vector_db_status || "Unknown"}
-                </div>
-              </div>
-              <div
-                style={{ fontSize: "12px", color: "#6b7280", marginTop: "5px" }}
-              >
-                ChromaDB Local Instance
-              </div>
-            </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Document Statistics */}
       <div style={{ marginBottom: "30px" }}>
@@ -346,14 +399,52 @@ function Settings() {
                 >
                   {doc.filename}
                 </div>
-                <div style={{ fontSize: "12px", color: "#6b7280" }}>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>
                   ID: {doc.id} • Organization: {doc.organization_id}
                 </div>
-                <div style={{ fontSize: "12px", color: "#6b7280" }}>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>
                   Text:{" "}
-                  {doc.has_extracted_text ? "✅ Extracted" : "❌ Not extracted"}
-                  • Length: {doc.text_length} chars • Chunks: {doc.chunk_count}
+                  {doc.has_extracted_text ? "✅ Extracted" : "❌ Not extracted"} •
+                  Length: {doc.text_length} chars • Chunks: {doc.chunk_count}
                 </div>
+
+                {/* Graph summary */}
+                <div style={{ marginTop: 6 }}>
+                  <button
+                    onClick={() => loadDocSummary(doc.id)}
+                    style={{
+                      padding: "4px 8px",
+                      backgroundColor: "#10b981",
+                      color: "white",
+                      border: "none",
+                      borderRadius: 4,
+                      cursor: "pointer",
+                      fontSize: 12,
+                      marginRight: 8,
+                    }}
+                  >
+                    Graph Summary
+                  </button>
+                  {docSummaries[doc.id]?.loading && (
+                    <span style={{ fontSize: 12, color: "#64748b" }}>
+                      Loading...
+                    </span>
+                  )}
+                  {docSummaries[doc.id]?.error && (
+                    <span style={{ fontSize: 12, color: "#b91c1c" }}>
+                      {docSummaries[doc.id].error}
+                    </span>
+                  )}
+                  {docSummaries[doc.id] &&
+                    !docSummaries[doc.id].loading &&
+                    !docSummaries[doc.id].error && (
+                      <span style={{ fontSize: 12, color: "#334155" }}>
+                        Chunks: {docSummaries[doc.id].chunks} • Entities:{" "}
+                        {docSummaries[doc.id].entities}
+                      </span>
+                    )}
+                </div>
+
                 {doc.has_extracted_text && (
                   <div style={{ marginTop: "8px" }}>
                     <button
@@ -403,94 +494,61 @@ function Settings() {
                   <div
                     style={{
                       marginTop: "10px",
+                      backgroundColor: "#f8fafc",
                       padding: "10px",
-                      backgroundColor: "#f1f5f9",
                       borderRadius: "6px",
                       border: "1px solid #e2e8f0",
-                      maxHeight: "240px",
-                      overflow: "auto",
                     }}
                   >
-                    {/* Show which engine was actually used */}
-                    {chunksCache[doc.id] &&
-                      chunksCache[doc.id][
-                        engineChoice[doc.id] || "docling"
-                      ] && (
-                        <div
-                          style={{
-                            fontSize: "12px",
-                            color: "#475569",
-                            marginBottom: "6px",
-                          }}
-                        >
-                          <strong>Used Engine:</strong>{" "}
-                          {
-                            chunksCache[doc.id][
-                              engineChoice[doc.id] || "docling"
-                            ].used_engine
-                          }
-                        </div>
-                      )}
-                    {/* Show debug info from backend to explain fallbacks */}
-                    {chunksCache[doc.id] &&
-                      chunksCache[doc.id][engineChoice[doc.id] || "docling"]
-                        ?.debug && (
-                        <details style={{ marginBottom: "8px" }}>
-                          <summary
-                            style={{
-                              cursor: "pointer",
-                              fontSize: "12px",
-                              color: "#64748b",
-                            }}
-                          >
-                            Debug details
-                          </summary>
-                          <pre
-                            style={{
-                              whiteSpace: "pre-wrap",
-                              fontSize: "11px",
-                              color: "#475569",
-                              marginTop: "6px",
-                              background: "#e2e8f0",
-                              padding: "8px",
-                              borderRadius: "4px",
-                            }}
-                          >
-                            {JSON.stringify(
-                              chunksCache[doc.id][
-                                engineChoice[doc.id] || "docling"
-                              ].debug,
-                              null,
-                              2
-                            )}
-                          </pre>
-                        </details>
-                      )}
                     {chunksLoading[doc.id] ? (
                       <div style={{ fontSize: "12px", color: "#64748b" }}>
                         Loading chunks...
                       </div>
-                    ) : chunksCache[doc.id]?.error ? (
-                      <div style={{ fontSize: "12px", color: "#dc2626" }}>
-                        {chunksCache[doc.id].error}
-                      </div>
                     ) : (
-                      <ol style={{ margin: 0, paddingLeft: "18px" }}>
-                        {(
-                          (chunksCache[doc.id] &&
-                            chunksCache[doc.id][
-                              engineChoice[doc.id] || "docling"
-                            ]?.chunks) ||
-                          []
-                        ).map((c, i) => (
-                          <li
-                            key={i}
-                            style={{ marginBottom: "6px", fontSize: "12px" }}
-                          >
-                            {c}
-                          </li>
-                        ))}
-                      </ol>
+                      <div>
+                        {(() => {
+                          const engine = engineChoice[doc.id] || "docling";
+                          const data = chunksCache[doc.id]?.[engine];
+                          if (!data) return null;
+                          if (data.error)
+                            return (
+                              <div style={{ fontSize: 12, color: "#b91c1c" }}>
+                                {data.error}
+                              </div>
+                            );
+                          return (
+                            <div>
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  color: "#334155",
+                                  marginBottom: 6,
+                                }}
+                              >
+                                Used Engine:{" "}
+                                {data.used_engine || data.engine || engine} • Chunks:{" "}
+                                {data.chunk_count}
+                              </div>
+                              <div
+                                style={{
+                                  maxHeight: 220,
+                                  overflowY: "auto",
+                                  fontSize: 12,
+                                  color: "#0f172a",
+                                }}
+                              >
+                                <ol style={{ margin: 0, paddingLeft: 18 }}>
+                                  {data.chunks?.map((c, i) => (
+                                    <li key={i} style={{ marginBottom: 6 }}>
+                                      {c}
+                                    </li>
+                                  ))}
+                                </ol>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
                     )}
                   </div>
                 )}

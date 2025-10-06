@@ -10,6 +10,7 @@ A FastAPI-based backend for a RAG (Retrieval-Augmented Generation) chatbot with 
 - **Document Management**: Upload, process, and query documents
 - **AI Chat**: Powered by Google Gemini API
 - **Vector Database**: ChromaDB for document embeddings
+- **Graph Database**: Optional Neo4j for entity and chunk relations
 
 ## 🏗️ **Role System**
 
@@ -182,6 +183,12 @@ API_PORT=8002
 
 # CORS Origins
 CORS_ORIGINS=["http://localhost:3000"]
+
+# Optional: Graph Database (Neo4j)
+USE_GRAPH_DB=true
+GRAPH_DB_URI=bolt://localhost:7687
+GRAPH_DB_USER=neo4j
+GRAPH_DB_PASSWORD=your_neo4j_password
 ```
 
 ### 4. Install Dependencies
@@ -197,6 +204,27 @@ python main.py
 ```
 
 The API will be available at `http://localhost:8002`
+
+## Graph DB (Neo4j) Integration
+
+If enabled via `USE_GRAPH_DB=true`, the backend will write documents, chunks, and lightweight entities to Neo4j, and augment search results with related context.
+
+Quick start (local):
+
+1. Install Neo4j Desktop or run a Docker container with Neo4j 5.x
+2. Create a database and note the bolt URI and credentials
+3. Set env vars as above and restart the backend
+
+API endpoints:
+
+- `GET /api/graph/health` → Check connection status
+- `POST /api/graph/reindex` → Recreate nodes/relations for all docs in your org
+- `GET /api/graph/document/{document_id}/summary` → Count chunks and entities for a doc
+
+Cypher model:
+
+- Nodes: `Document {id, filename}`, `Chunk {id, text, index}`, `Entity {id, type, name}`
+- Relationships: `(Document)-[:HAS_CHUNK]->(Chunk)`, `(Chunk)-[:MENTIONS]->(Entity)`, `(Entity)-[:RELATED_TO {relation:"CO_OCCURS_WITH"}]->(Entity)`
 
 ## API Endpoints
 

@@ -7,6 +7,7 @@ from .routes.organizations import router as org_router
 from .routes.admins import router as admin_router
 from .routes.users import router as user_router
 from .routes.system import router as system_router
+from .routes.graph import router as graph_router
 
 # Create main router
 router = APIRouter()
@@ -17,3 +18,4 @@ router.include_router(org_router)
 router.include_router(admin_router)
 router.include_router(user_router)
 router.include_router(system_router)
+router.include_router(graph_router)

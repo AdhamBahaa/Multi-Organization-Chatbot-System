@@ -615,6 +615,16 @@ export const sendMessage = async (message, sessionId = null) => {
   }
 };
 
+// Feedback API
+export const submitFeedback = async (payload) => {
+  try {
+    const response = await api.post("/feedback/submit", payload);
+    return response.data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to submit feedback"));
+  }
+};
+
 export const getChatSessions = async () => {
   try {
     const response = await api.get("/sessions");
@@ -632,6 +642,34 @@ export const getSessionMessages = async (sessionId) => {
   } catch (error) {
     console.error("Messages error:", error);
     return [];
+  }
+};
+
+// Chat history API used by ChatHistory component
+export const getUserSessions = async () => {
+  try {
+    const response = await api.get("/sessions");
+    return response.data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to load sessions"));
+  }
+};
+
+export const getSessionHistory = async (sessionId) => {
+  try {
+    const response = await api.get(`/sessions/${sessionId}`);
+    return response.data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to load session history"));
+  }
+};
+
+export const deleteSession = async (sessionId) => {
+  try {
+    const response = await api.delete(`/sessions/${sessionId}`);
+    return response.data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to delete session"));
   }
 };
 
@@ -680,6 +718,39 @@ export const deleteDocument = async (documentId) => {
   }
 };
 
+// Documents: chunks viewer
+export const getDocumentChunks = async (documentId, engine = "docling") => {
+  try {
+    const timeout = engine && String(engine).startsWith("docling") ? 120000 : 30000;
+    const response = await api.get(`/documents/${documentId}/chunks`, {
+      params: { engine },
+      timeout,
+    });
+    return response.data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to load chunks"));
+  }
+};
+
+// Admin Feedback API
+export const getUsersFeedback = async () => {
+  try {
+    const response = await api.get("/feedback/admin/users-feedback");
+    return response.data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to load users' feedback"));
+  }
+};
+
+export const getFeedbackStats = async () => {
+  try {
+    const response = await api.get("/feedback/admin/feedback-stats");
+    return response.data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to load feedback stats"));
+  }
+};
+
 // Admin API
 export const getSystemStats = async () => {
   try {
@@ -714,128 +785,56 @@ export const debugOrganizationDocuments = async () => {
     const response = await api.get("/documents/debug/organization");
     return response.data;
   } catch (error) {
-    console.error("Debug organization error:", error);
-    return null;
+    throw new Error(extractErrorMessage(error, "Failed to load debug info"));
   }
 };
 
-export const getDocumentChunks = async (documentId, engine = "docling") => {
+// Graph API
+export const getGraphHealth = async () => {
   try {
-    const response = await api.get(`/documents/${documentId}/chunks`, {
-      params: { engine },
-      // Docling variants can take longer on first run while downloading models
-      timeout: engine.startsWith("docling") ? 120000 : undefined,
-    });
+    const response = await api.get("/graph/health", { timeout: 10000 });
     return response.data;
   } catch (error) {
-    console.error(
-      "Get chunks error:",
-      error.response?.data?.detail || error.message
-    );
-    throw new Error(error.response?.data?.detail || "Failed to get chunks");
+    throw new Error(extractErrorMessage(error, "Failed to get graph health"));
   }
 };
 
-// Feedback API
-export const submitFeedback = async (feedbackData) => {
+export const reindexGraph = async () => {
   try {
-    const response = await api.post("/feedback/submit", feedbackData);
+    // Reindex can be heavy; allow up to 5 minutes
+    const response = await api.post("/graph/reindex", null, { timeout: 300000 });
     return response.data;
   } catch (error) {
-    console.error(
-      "Submit feedback error:",
-      error.response?.data?.detail || error.message
-    );
-    throw new Error(
-      error.response?.data?.detail || "Failed to submit feedback"
-    );
+    throw new Error(extractErrorMessage(error, "Failed to reindex graph"));
   }
 };
 
-export const getMyFeedback = async () => {
+// Background reindex API
+export const startGraphReindexBackground = async () => {
   try {
-    const response = await api.get("/feedback/my-feedback");
-    return response.data;
+    const response = await api.post("/graph/reindex/background", null, { timeout: 15000 });
+    return response.data; // { job_id, state }
   } catch (error) {
-    console.error(
-      "Get my feedback error:",
-      error.response?.data?.detail || error.message
-    );
-    throw new Error(error.response?.data?.detail || "Failed to get feedback");
+    throw new Error(extractErrorMessage(error, "Failed to start background reindex"));
   }
 };
 
-export const getUsersFeedback = async () => {
+export const getGraphReindexStatus = async (jobId) => {
   try {
-    const response = await api.get("/feedback/admin/users-feedback");
-    return response.data;
+    const response = await api.get(`/graph/reindex/status/${jobId}`, { timeout: 15000 });
+    return response.data; // { state, indexed, ... }
   } catch (error) {
-    console.error(
-      "Get users feedback error:",
-      error.response?.data?.detail || error.message
-    );
-    throw new Error(
-      error.response?.data?.detail || "Failed to get users feedback"
-    );
+    throw new Error(extractErrorMessage(error, "Failed to get reindex status"));
   }
 };
 
-export const getFeedbackStats = async () => {
+export const getGraphDocumentSummary = async (documentId) => {
   try {
-    const response = await api.get("/feedback/admin/feedback-stats");
+    // Summary may run aggregations; allow more time than default
+    const response = await api.get(`/graph/document/${documentId}/summary`, { timeout: 60000 });
     return response.data;
   } catch (error) {
-    console.error(
-      "Get feedback stats error:",
-      error.response?.data?.detail || error.message
-    );
-    throw new Error(
-      error.response?.data?.detail || "Failed to get feedback statistics"
-    );
-  }
-};
-
-// Chat History API functions
-export const getUserSessions = async () => {
-  try {
-    const response = await api.get("/chat-history/sessions");
-    return response.data;
-  } catch (error) {
-    console.error(
-      "Get user sessions error:",
-      error.response?.data?.detail || error.message
-    );
-    throw new Error(
-      error.response?.data?.detail || "Failed to get user sessions"
-    );
-  }
-};
-
-export const getSessionHistory = async (sessionId) => {
-  try {
-    const response = await api.get(`/chat-history/sessions/${sessionId}`);
-    return response.data;
-  } catch (error) {
-    console.error(
-      "Get session history error:",
-      error.response?.data?.detail || error.message
-    );
-    throw new Error(
-      error.response?.data?.detail || "Failed to get session history"
-    );
-  }
-};
-
-export const deleteSession = async (sessionId) => {
-  try {
-    const response = await api.delete(`/chat-history/sessions/${sessionId}`);
-    return response.data;
-  } catch (error) {
-    console.error(
-      "Delete session error:",
-      error.response?.data?.detail || error.message
-    );
-    throw new Error(error.response?.data?.detail || "Failed to delete session");
+    throw new Error(extractErrorMessage(error, "Failed to get graph summary"));
   }
 };
 

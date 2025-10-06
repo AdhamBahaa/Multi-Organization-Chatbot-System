@@ -87,6 +87,18 @@ GRAPH_DB_URI = os.getenv("GRAPH_DB_URI", "bolt://localhost:7687")
 GRAPH_DB_USER = os.getenv("GRAPH_DB_USER", "neo4j")
 GRAPH_DB_PASSWORD = os.getenv("GRAPH_DB_PASSWORD", "password")
 
+# Performance tuning
+# Limit number of entities linked per chunk to keep graph sparse and reindex fast
+MAX_ENTITIES_PER_CHUNK = int(os.getenv("MAX_ENTITIES_PER_CHUNK", "10"))
+# Optional: size of batches for bulk operations (not strictly required, but kept for future use)
+GRAPH_BATCH_TX_SIZE = int(os.getenv("GRAPH_BATCH_TX_SIZE", "500"))
+"""
+Control co-occurrence edge creation. These edges can explode combinatorially per chunk.
+Disable or limit to keep reindex fast.
+"""
+ENABLE_ENTITY_COOCCURRENCE = os.getenv("ENABLE_ENTITY_COOCCURRENCE", "true").lower() in ("1", "true", "yes")
+MAX_COOCCURRENCE_PER_CHUNK = int(os.getenv("MAX_COOCCURRENCE_PER_CHUNK", "30"))
+
 # Demo Users (for development only)
 DEMO_USERS = {
     "admin": {"id": 1, "username": "admin", "password": "admin123", "role": "admin"},

@@ -156,6 +156,13 @@ async def delete_document(document_id: str):
     from .vector_db import vector_db
     vector_db.delete_document(document_id)
     
+    # Remove from graph database
+    if USE_GRAPH_DB:
+        try:
+            graph_client.delete_document(document_id)
+        except Exception:
+            pass
+    
     return {"message": "Document deleted successfully"}
 
 async def get_system_stats() -> SystemStatsResponse:
