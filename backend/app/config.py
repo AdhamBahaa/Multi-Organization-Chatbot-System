@@ -99,6 +99,11 @@ Disable or limit to keep reindex fast.
 ENABLE_ENTITY_COOCCURRENCE = os.getenv("ENABLE_ENTITY_COOCCURRENCE", "true").lower() in ("1", "true", "yes")
 MAX_COOCCURRENCE_PER_CHUNK = int(os.getenv("MAX_COOCCURRENCE_PER_CHUNK", "30"))
 
+# Typed relations (subject-predicate-object) extraction
+# Disabled by default. When enabled, simple rule-based relations like LIVES_IN, KNOWS, WORKS_AT, PART_OF, REPORTS_TO, AGE are detected.
+ENABLE_TYPED_RELATIONS = os.getenv("ENABLE_TYPED_RELATIONS", "false").lower() in ("1", "true", "yes")
+MAX_TYPED_RELATIONS_PER_CHUNK = int(os.getenv("MAX_TYPED_RELATIONS_PER_CHUNK", "20"))
+
 # Demo Users (for development only)
 DEMO_USERS = {
     "admin": {"id": 1, "username": "admin", "password": "admin123", "role": "admin"},

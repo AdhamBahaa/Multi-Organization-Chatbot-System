@@ -796,6 +796,19 @@ export const debugOrganizationDocuments = async () => {
   }
 };
 
+// Vector reindex (embeddings)
+export const reindexDocuments = async () => {
+  try {
+    // Rebuilding embeddings can take time; allow up to 5 minutes
+    const response = await api.post("/documents/reindex", null, {
+      timeout: 300000,
+    });
+    return response.data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to reindex documents"));
+  }
+};
+
 // Graph API
 export const getGraphHealth = async () => {
   try {

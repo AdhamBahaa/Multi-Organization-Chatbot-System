@@ -191,8 +191,11 @@ async def get_organization_stats(organization_id: int) -> dict:
         print(f"   Document {i+1}: {doc.get('filename', 'Unknown')} (ID: {doc.get('id', 'Unknown')})")
     
     # Return detailed information including document list
+    total_chunks = sum(int(doc.get("chunk_count", 0) or 0) for doc in org_docs)
+
     return {
         "total_documents": len(org_docs),
+        "total_chunks": total_chunks,
         "organization_id": organization_id,
         "documents": [
             {

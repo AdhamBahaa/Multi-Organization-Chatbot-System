@@ -15,6 +15,8 @@ from ..config import (
     MAX_ENTITIES_PER_CHUNK,
     ENABLE_ENTITY_COOCCURRENCE,
     MAX_COOCCURRENCE_PER_CHUNK,
+    ENABLE_TYPED_RELATIONS,
+    MAX_TYPED_RELATIONS_PER_CHUNK,
 )
 from ..document_store import document_store
 from ..graph_db import graph_client
@@ -58,7 +60,7 @@ async def graph_reindex(
             return {"message": "No documents to index", "indexed": 0}
 
         from ..docling_chunker import chunk_text_with_docling
-        from ..entity_extraction import extract_entities
+        from ..entity_extraction import extract_entities, extract_relations
 
         indexed = 0
         for doc in docs:
@@ -100,6 +102,7 @@ async def graph_reindex(
             mentions_rows = []
             entity_rows = []
             cooccur_rows = []
+            typed_rel_rows = []
             seen_entities_doc = set()
             for idx, chunk_text in enumerate(chunks):
                 chunk_id = f"{doc_id}_chunk_{idx}"
@@ -127,6 +130,24 @@ async def graph_reindex(
                                 break
                             cooccur_rows.append({"sid": ents[i], "tid": ents[j], "relation": "CO_OCCURS_WITH"})
                             pairs_added += 1
+
+                # Typed relations (subject, predicate, object)
+                if ENABLE_TYPED_RELATIONS:
+                    rels = extract_relations(chunk_text)[:MAX_TYPED_RELATIONS_PER_CHUNK]
+                    for (subj, pred, obj) in rels:
+                        s_id = f"ProperNoun:{subj}"
+                        o_id = f"ProperNoun:{obj}"
+                        # Ensure subject/object entities exist
+                        if s_id not in seen_entities_doc:
+                            seen_entities_doc.add(s_id)
+                            entity_rows.append({"id": s_id, "type": "ProperNoun", "name": subj})
+                        if o_id not in seen_entities_doc:
+                            seen_entities_doc.add(o_id)
+                            entity_rows.append({"id": o_id, "type": "ProperNoun", "name": obj})
+                        # Link chunk mentions for provenance
+                        mentions_rows.append({"chunk_id": chunk_id, "entity_id": s_id})
+                        mentions_rows.append({"chunk_id": chunk_id, "entity_id": o_id})
+                        typed_rel_rows.append({"sid": s_id, "tid": o_id, "relation": pred})
 
             # Bulk write
             try:
@@ -159,6 +180,13 @@ async def graph_reindex(
                     for row in cooccur_rows:
                         graph_client.relate_entity_entity(row["sid"], row["relation"], row["tid"])
 
+            if typed_rel_rows:
+                try:
+                    graph_client.bulk_relate_entities(typed_rel_rows)
+                except AttributeError:
+                    for row in typed_rel_rows:
+                        graph_client.relate_entity_entity(row["sid"], row["relation"], row["tid"])
+
             indexed += 1
 
         return {"message": "Graph reindex completed", "indexed": indexed, "organization_id": org_id}
@@ -187,7 +215,7 @@ def _run_reindex_for_org(org_id: int):
             return
 
         from ..docling_chunker import chunk_text_with_docling
-        from ..entity_extraction import extract_entities
+        from ..entity_extraction import extract_entities, extract_relations
 
         indexed = 0
         for doc in docs:
@@ -224,6 +252,7 @@ def _run_reindex_for_org(org_id: int):
             mentions_rows = []
             entity_rows = []
             cooccur_rows = []
+            typed_rel_rows = []
             seen_entities_doc = set()
             for idx, chunk_text in enumerate(chunks):
                 chunk_id = f"{doc_id}_chunk_{idx}"
@@ -250,6 +279,22 @@ def _run_reindex_for_org(org_id: int):
                                 break
                             cooccur_rows.append({"sid": ents[i], "tid": ents[j], "relation": "CO_OCCURS_WITH"})
                             pairs_added += 1
+
+                # Typed relations
+                if ENABLE_TYPED_RELATIONS:
+                    rels = extract_relations(chunk_text)[:MAX_TYPED_RELATIONS_PER_CHUNK]
+                    for (subj, pred, obj) in rels:
+                        s_id = f"ProperNoun:{subj}"
+                        o_id = f"ProperNoun:{obj}"
+                        if s_id not in seen_entities_doc:
+                            seen_entities_doc.add(s_id)
+                            entity_rows.append({"id": s_id, "type": "ProperNoun", "name": subj})
+                        if o_id not in seen_entities_doc:
+                            seen_entities_doc.add(o_id)
+                            entity_rows.append({"id": o_id, "type": "ProperNoun", "name": obj})
+                        mentions_rows.append({"chunk_id": chunk_id, "entity_id": s_id})
+                        mentions_rows.append({"chunk_id": chunk_id, "entity_id": o_id})
+                        typed_rel_rows.append({"sid": s_id, "tid": o_id, "relation": pred})
 
             try:
                 graph_client.bulk_upsert_chunks(doc_id, chunk_rows)
@@ -278,6 +323,12 @@ def _run_reindex_for_org(org_id: int):
                     graph_client.bulk_relate_entities(cooccur_rows)
                 except AttributeError:
                     for row in cooccur_rows:
+                        graph_client.relate_entity_entity(row["sid"], row["relation"], row["tid"])
+            if typed_rel_rows:
+                try:
+                    graph_client.bulk_relate_entities(typed_rel_rows)
+                except AttributeError:
+                    for row in typed_rel_rows:
                         graph_client.relate_entity_entity(row["sid"], row["relation"], row["tid"])
 
             indexed += 1

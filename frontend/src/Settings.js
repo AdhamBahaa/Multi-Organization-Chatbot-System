@@ -36,6 +36,8 @@ function Settings() {
   const [graphActionMsg, setGraphActionMsg] = useState("");
   const [graphJob, setGraphJob] = useState(null);
   const [docSummaries, setDocSummaries] = useState({});
+  const [vecLoading, setVecLoading] = useState(false);
+  const [vecActionMsg, setVecActionMsg] = useState("");
 
   useEffect(() => {
     loadSystemData();
@@ -60,6 +62,7 @@ function Settings() {
         setStats((prevStats) => ({
           ...prevStats,
           total_documents: orgStats.total_documents || 0,
+          total_chunks: orgStats.total_chunks ?? prevStats.total_chunks ?? 0,
           organization_id: orgStats.organization_id || null,
           documents: orgStats.documents || [],
         }));
@@ -187,6 +190,26 @@ function Settings() {
     }
   };
 
+  const triggerVectorReindex = async () => {
+    setVecLoading(true);
+    setVecActionMsg("");
+    try {
+      const { reindexDocuments } = await import("./api");
+      const res = await reindexDocuments();
+      setVecActionMsg(
+        `Vector reindex completed: indexed ${res.indexed ?? 0}, skipped ${
+          res.skipped ?? 0
+        }.`
+      );
+      // Refresh stats to reflect updated chunk totals if any were recomputed
+      await loadSystemData();
+    } catch (e) {
+      setVecActionMsg(`Vector reindex failed: ${e.message}`);
+    } finally {
+      setVecLoading(false);
+    }
+  };
+
   const loadDocSummary = async (docId) => {
     setDocSummaries((p) => ({ ...p, [docId]: { loading: true } }));
     try {
@@ -310,6 +333,29 @@ function Settings() {
       {/* Document Statistics */}
       <div style={{ marginBottom: "30px" }}>
         <h3>Document Statistics</h3>
+        <div style={{ marginBottom: 10 }}>
+          <button
+            onClick={triggerVectorReindex}
+            disabled={vecLoading}
+            style={{
+              padding: "6px 10px",
+              backgroundColor: vecLoading ? "#93c5fd" : "#1d4ed8",
+              color: "white",
+              border: "none",
+              borderRadius: 4,
+              cursor: vecLoading ? "default" : "pointer",
+              fontSize: 12,
+              marginRight: 10,
+            }}
+          >
+            {vecLoading ? "Reindexing..." : "Reindex Vectors (Org)"}
+          </button>
+          {vecActionMsg && (
+            <span style={{ fontSize: 12, color: "#334155", marginLeft: 8 }}>
+              {vecActionMsg}
+            </span>
+          )}
+        </div>
         <div
           style={{
             display: "grid",
