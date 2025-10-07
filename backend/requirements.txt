@@ -17,6 +17,10 @@ chromadb==0.4.18
 sentence-transformers==5.1.0
 numpy<2.0
 
+# LangChain (validation layer)
+langchain==0.2.16
+langchain-google-genai==1.0.7
+
 # Graph database
 neo4j==5.26.0
 

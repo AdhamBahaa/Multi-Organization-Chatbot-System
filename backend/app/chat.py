@@ -191,6 +191,15 @@ async def generate_chat_response(chat_data: ChatRequest, organization_id: int = 
             
             # Debug: Print the cleaned AI response
             print(f"🔍 Cleaned AI response: {repr(ai_response)}")
+
+            # LangChain-based validation and correction
+            try:
+                from .validation import validate_and_fix_response
+                # Provide the document_context to enable fact-checking
+                print(f"[chat] Passing context to validator: {len(document_context)} chars")
+                ai_response = validate_and_fix_response(chat_data.message, ai_response, detected_language, context_text=document_context)
+            except Exception as _:
+                pass
             
             # Verify the response is in the correct language
             response_language = detect_language(ai_response)
@@ -220,6 +229,13 @@ async def generate_chat_response(chat_data: ChatRequest, organization_id: int = 
                 # Clean up extra whitespace
                 ai_response = re.sub(r'\n\s*\n\s*\n', '\n\n', ai_response, flags=re.UNICODE)     # Remove excessive line breaks
                 ai_response = ai_response.strip()
+                # Validate again after regeneration
+                try:
+                    from .validation import validate_and_fix_response
+                    print(f"[chat] Re-validation with context after regeneration: {len(document_context)} chars")
+                    ai_response = validate_and_fix_response(chat_data.message, ai_response, detected_language, context_text=document_context)
+                except Exception:
+                    pass
             
         else:
             ai_response = f"I'm a demo RAG chatbot. The Gemini API is not configured, so this is a mock response. Please configure the GOOGLE_API_KEY environment variable to enable AI responses."

@@ -111,6 +111,14 @@ HYBRID_RRF_K = int(os.getenv("HYBRID_RRF_K", "60"))
 # Limit how many chunks per document we include in the final prompt context
 HYBRID_MAX_CHUNKS_PER_DOC = int(os.getenv("HYBRID_MAX_CHUNKS_PER_DOC", "6"))
 
+# Post-generation validation
+ENABLE_LC_VALIDATION = os.getenv("ENABLE_LC_VALIDATION", "true").lower() in ("1", "true", "yes")
+# Max allowed characters in final response (acts as a guardrail; 0 disables)
+VALIDATION_MAX_CHARS = int(os.getenv("VALIDATION_MAX_CHARS", "3000"))
+
+# Fact-check validation (evaluates answer strictly against provided context)
+ENABLE_FACT_CHECK_VALIDATION = os.getenv("ENABLE_FACT_CHECK_VALIDATION", "true").lower() in ("1", "true", "yes")
+
 # Demo Users (for development only)
 DEMO_USERS = {
     "admin": {"id": 1, "username": "admin", "password": "admin123", "role": "admin"},
