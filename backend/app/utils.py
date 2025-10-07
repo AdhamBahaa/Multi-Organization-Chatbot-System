@@ -8,7 +8,15 @@ import PyPDF2
 import docx
 from io import BytesIO
 from typing import List, Dict, Tuple
-from .config import UPLOAD_DIR, ALLOWED_FILE_TYPES, USE_VECTOR_DB, USE_GRAPH_DB
+from .config import (
+    UPLOAD_DIR,
+    ALLOWED_FILE_TYPES,
+    USE_VECTOR_DB,
+    USE_GRAPH_DB,
+    ENABLE_HYBRID_RETRIEVAL,
+    HYBRID_RRF_K,
+    HYBRID_MAX_CHUNKS_PER_DOC,
+)
 import re
 
 # Import the persistent document store
@@ -123,6 +131,55 @@ def search_documents(query: str, organization_id: int = None) -> List[dict]:
     # Convert to list and sort by relevance
     results = list(document_results.values())
     results.sort(key=lambda x: x['relevance'], reverse=True)
+
+    # Optional: fuse with a simple keyword rank using Reciprocal Rank Fusion (RRF)
+    if ENABLE_HYBRID_RETRIEVAL:
+        # Build a lightweight keyword rank: position by count of keyword hits in doc text
+        try:
+            # Gather org documents
+            if organization_id is not None:
+                all_documents = document_store.get_documents_by_organization(organization_id)
+            else:
+                all_documents = document_store.get_all_documents()
+            # Precompute a keyword score per document
+            kw_scores: Dict[str, int] = {}
+            q_terms = [t for t in re.split(r"\W+", query.lower()) if t]
+            for d in all_documents:
+                doc_id = d.get("id")
+                text = (d.get("extracted_text") or "").lower()
+                if not doc_id or not text:
+                    continue
+                score = 0
+                for t in q_terms:
+                    if not t:
+                        continue
+                    # Count occurrences
+                    score += text.count(t)
+                if score > 0:
+                    kw_scores[doc_id] = score
+            # Rank documents by keyword score (desc)
+            kw_ranked = sorted(kw_scores.items(), key=lambda x: x[1], reverse=True)
+            kw_pos = {doc_id: idx for idx, (doc_id, _) in enumerate(kw_ranked)}
+
+            # Build vector rank index for current results
+            vec_pos = {r['document_id']: idx for idx, r in enumerate(results)}
+
+            # Apply RRF per document (lower rank index = better)
+            def rrf(rank_idx: int, k: int) -> float:
+                return 1.0 / (k + rank_idx + 1)
+
+            fused: List[Tuple[dict, float]] = []
+            for idx, r in enumerate(results):
+                doc_id = r['document_id']
+                v = rrf(idx, HYBRID_RRF_K)
+                kpos = kw_pos.get(doc_id)
+                k = rrf(kpos, HYBRID_RRF_K) if kpos is not None else 0.0
+                fused.append((r, v + k))
+
+            fused.sort(key=lambda x: x[1], reverse=True)
+            results = [r for r, _ in fused]
+        except Exception as e:
+            print(f"⚠️ Hybrid retrieval fusion skipped due to error: {e}")
     
     # Optional: Expand with Graph DB context per document
     if USE_GRAPH_DB:
@@ -157,6 +214,11 @@ def search_documents(query: str, organization_id: int = None) -> List[dict]:
         except Exception as e:
             print(f"⚠️ Graph expansion skipped due to error: {e}")
     
+    # Trim excessive chunks per doc to keep prompts tight
+    for r in results:
+        if isinstance(r.get('chunks'), list) and len(r['chunks']) > HYBRID_MAX_CHUNKS_PER_DOC:
+            r['chunks'] = r['chunks'][:HYBRID_MAX_CHUNKS_PER_DOC]
+
     print(f"📄 Found {len(results)} documents with relevant content")
     return results
 

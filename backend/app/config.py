@@ -104,6 +104,13 @@ MAX_COOCCURRENCE_PER_CHUNK = int(os.getenv("MAX_COOCCURRENCE_PER_CHUNK", "30"))
 ENABLE_TYPED_RELATIONS = os.getenv("ENABLE_TYPED_RELATIONS", "false").lower() in ("1", "true", "yes")
 MAX_TYPED_RELATIONS_PER_CHUNK = int(os.getenv("MAX_TYPED_RELATIONS_PER_CHUNK", "20"))
 
+# Hybrid retrieval (score fusion of vector + keyword)
+ENABLE_HYBRID_RETRIEVAL = os.getenv("ENABLE_HYBRID_RETRIEVAL", "false").lower() in ("1", "true", "yes")
+# RRF parameter (larger K reduces the impact of rank position differences)
+HYBRID_RRF_K = int(os.getenv("HYBRID_RRF_K", "60"))
+# Limit how many chunks per document we include in the final prompt context
+HYBRID_MAX_CHUNKS_PER_DOC = int(os.getenv("HYBRID_MAX_CHUNKS_PER_DOC", "6"))
+
 # Demo Users (for development only)
 DEMO_USERS = {
     "admin": {"id": 1, "username": "admin", "password": "admin123", "role": "admin"},
