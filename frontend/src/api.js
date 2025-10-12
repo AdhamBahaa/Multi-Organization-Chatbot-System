@@ -721,7 +721,7 @@ export const deleteDocument = async (documentId) => {
 };
 
 // Documents: chunks viewer
-export const getDocumentChunks = async (documentId, engine = "docling") => {
+export const getDocumentChunks = async (documentId, engine = "oddadmix") => {
   try {
     const timeout =
       engine && String(engine).startsWith("docling") ? 120000 : 30000;

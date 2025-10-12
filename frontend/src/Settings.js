@@ -38,6 +38,7 @@ function Settings() {
   const [docSummaries, setDocSummaries] = useState({});
   const [vecLoading, setVecLoading] = useState(false);
   const [vecActionMsg, setVecActionMsg] = useState("");
+  const [debugOpen, setDebugOpen] = useState({});
 
   useEffect(() => {
     loadSystemData();
@@ -107,11 +108,19 @@ function Settings() {
   const toggleChunks = async (docId) => {
     setOpenChunks((prev) => ({ ...prev, [docId]: !prev[docId] }));
     const willOpen = !openChunks[docId];
-    const engine = engineChoice[docId] || "docling";
+    const engine = engineChoice[docId] || "oddadmix";
     if (willOpen && !(chunksCache[docId] && chunksCache[docId][engine])) {
       setChunksLoading((p) => ({ ...p, [docId]: true }));
       try {
         const data = await getDocumentChunks(docId, engine);
+        try {
+          console.log("[chunks-ui] fetched", {
+            docId,
+            engine,
+            used_engine: data?.used_engine,
+            debug: data?.debug,
+          });
+        } catch {}
         setChunksCache((p) => ({
           ...p,
           [docId]: { ...(p[docId] || {}), [engine]: data },
@@ -137,6 +146,14 @@ function Settings() {
       setChunksLoading((p) => ({ ...p, [docId]: true }));
       try {
         const data = await getDocumentChunks(docId, newEngine);
+        try {
+          console.log("[chunks-ui] fetched", {
+            docId,
+            engine: newEngine,
+            used_engine: data?.used_engine,
+            debug: data?.debug,
+          });
+        } catch {}
         setChunksCache((p) => ({
           ...p,
           [docId]: { ...(p[docId] || {}), [newEngine]: data },
@@ -508,7 +525,7 @@ function Settings() {
                     >
                       {openChunks[doc.id]
                         ? "Hide chunks"
-                        : "View chunks (Docling)"}
+                        : `View chunks (${engineChoice[doc.id] || "oddadmix"})`}
                     </button>
                     <span
                       style={{
@@ -520,7 +537,7 @@ function Settings() {
                       Engine:{" "}
                     </span>
                     <select
-                      value={engineChoice[doc.id] || "docling"}
+                      value={engineChoice[doc.id] || "oddadmix"}
                       onChange={(e) => changeEngine(doc.id, e.target.value)}
                       style={{
                         padding: "4px 6px",
@@ -530,6 +547,7 @@ function Settings() {
                         marginLeft: "6px",
                       }}
                     >
+                      <option value="oddadmix">Oddadmix</option>
                       <option value="docling">Docling</option>
                       <option value="docling-hierarchical">
                         Docling Hierarchical
@@ -556,7 +574,7 @@ function Settings() {
                     ) : (
                       <div>
                         {(() => {
-                          const engine = engineChoice[doc.id] || "docling";
+                          const engine = engineChoice[doc.id] || "oddadmix";
                           const data = chunksCache[doc.id]?.[engine];
                           if (!data) return null;
                           if (data.error)
@@ -577,7 +595,61 @@ function Settings() {
                                 Used Engine:{" "}
                                 {data.used_engine || data.engine || engine} •
                                 Chunks: {data.chunk_count}
+                                {data.used_engine &&
+                                  data.used_engine !== engine && (
+                                    <span
+                                      style={{
+                                        marginLeft: 8,
+                                        color: "#b45309",
+                                      }}
+                                    >
+                                      (fallback from {engine})
+                                    </span>
+                                  )}
+                                <button
+                                  onClick={() =>
+                                    setDebugOpen((p) => ({
+                                      ...p,
+                                      [doc.id]: !p[doc.id],
+                                    }))
+                                  }
+                                  style={{
+                                    marginLeft: 10,
+                                    padding: "2px 6px",
+                                    fontSize: 11,
+                                    borderRadius: 4,
+                                    border: "1px solid #94a3b8",
+                                    background: debugOpen[doc.id]
+                                      ? "#e2e8f0"
+                                      : "#f8fafc",
+                                    color: "#334155",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  {debugOpen[doc.id]
+                                    ? "Hide debug"
+                                    : "Show debug"}
+                                </button>
                               </div>
+                              {debugOpen[doc.id] && (
+                                <pre
+                                  style={{
+                                    background: "#f1f5f9",
+                                    color: "#0f172a",
+                                    fontSize: 11,
+                                    padding: 8,
+                                    borderRadius: 4,
+                                    maxHeight: 200,
+                                    overflowY: "auto",
+                                    border: "1px solid #e2e8f0",
+                                    marginBottom: 8,
+                                  }}
+                                >
+                                  {data?.debug
+                                    ? JSON.stringify(data.debug, null, 2)
+                                    : "No debug info"}
+                                </pre>
+                              )}
                               <div
                                 style={{
                                   maxHeight: 220,

@@ -177,7 +177,8 @@ async def reindex_documents(
     """(Re)index all documents for the current user's organization into the vector DB.
 
     - Deletes existing embeddings per document to avoid duplicates
-    - Adds fresh embeddings using the current Docling/simple pipeline in vector_db
+    - Adds fresh embeddings using the current configured chunking engine in vector_db
+      (Oddadmix by default via CHUNKING_ENGINE), with fallbacks to Docling then simple.
     """
     if not USE_VECTOR_DB:
         raise HTTPException(status_code=400, detail="Vector DB is disabled by configuration")
@@ -237,7 +238,7 @@ async def reindex_documents(
 @router.get("/{document_id}/chunks")
 async def get_document_chunks(
     document_id: str,
-    engine: str = "docling",
+    engine: str = "oddadmix",
     current_user: Union[Admin, User] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -282,32 +283,68 @@ async def get_document_chunks(
         # Choose engine
         chunks = []
         used_engine = engine
-        if engine in ("docling", "docling-hybrid", "docling-hierarchical"):
+        debug_info = {}
+        fallback_info = {}
+        processed = False
+        if engine == "oddadmix":
             try:
-                from ..docling_chunker import (
-                    chunk_text_with_docling_with_debug_info,
-                    chunk_text_with_docling_debug,
-                    simple_sentence_chunk,
-                )
-                # Pass both pdf_path and text to the docling chunker (correct signature)
-                pdf_path = doc.get("file_path", "")
-                # Pass prefer_hybrid override when engine=docling-hybrid or docling-hierarchical
-                prefer_hybrid = True if engine == "docling-hybrid" else (False if engine == "docling-hierarchical" else None)
-                chunks, used_engine, debug_info = chunk_text_with_docling_with_debug_info(
-                    pdf_path=pdf_path, text=extracted_text, max_chunk_size=1000, prefer_hybrid=prefer_hybrid
-                )
+                from ..oddadmix_chunker import chunk_text_with_oddadmix, oddadmix_available
+                avail = oddadmix_available()
+                print(f"[chunks-route] Oddadmix available: {avail}")
+                if avail:
+                    from ..config import ODDADMIX_CHUNK_SIZE, ODDADMIX_CHUNK_OVERLAP
+                    chunks, used_engine, debug_info = chunk_text_with_oddadmix(extracted_text, ODDADMIX_CHUNK_SIZE, ODDADMIX_CHUNK_OVERLAP)
+                    processed = True
+                else:
+                    raise RuntimeError("Oddadmix not available; choose docling or simple")
             except Exception as e:
-                # Route-level log to help diagnose silent fallback
-                print(f"[chunks-route] Docling failed, falling back to simple. Error: {e}")
+                print(f"[chunks-route] Oddadmix failed, trying Docling. Error: {e}")
+                fallback_info = {
+                    "fallback_from": "oddadmix",
+                    "oddadmix_error": str(e),
+                }
+                engine = "docling"
+
+        # If Oddadmix did not fully process, try Docling or Simple
+        if not processed:
+            if engine in ("docling", "docling-hybrid", "docling-hierarchical"):
+                try:
+                    from ..docling_chunker import (
+                        chunk_text_with_docling_with_debug_info,
+                        chunk_text_with_docling_debug,
+                        simple_sentence_chunk,
+                    )
+                    # Pass both pdf_path and text to the docling chunker (correct signature)
+                    pdf_path = doc.get("file_path", "")
+                    # Pass prefer_hybrid override when engine=docling-hybrid or docling-hierarchical
+                    prefer_hybrid = True if engine == "docling-hybrid" else (False if engine == "docling-hierarchical" else None)
+                    docling_chunks, docling_used_engine, docling_debug = chunk_text_with_docling_with_debug_info(
+                        pdf_path=pdf_path, text=extracted_text, max_chunk_size=1000, prefer_hybrid=prefer_hybrid
+                    )
+                    # apply results
+                    chunks = docling_chunks
+                    used_engine = docling_used_engine
+                    # merge any prior fallback info with docling debug
+                    if isinstance(docling_debug, dict):
+                        debug_info = {**docling_debug, **fallback_info}
+                    else:
+                        debug_info = {"docling_debug": docling_debug, **fallback_info}
+                    processed = True
+                except Exception as e:
+                    # Route-level log to help diagnose silent fallback
+                    print(f"[chunks-route] Docling failed, falling back to simple. Error: {e}")
+                    from ..docling_chunker import simple_sentence_chunk
+                    chunks = simple_sentence_chunk(extracted_text, max_chunk_size=1000)
+                    used_engine = "simple"
+                    debug_info = {"error": str(e), **fallback_info}
+                    processed = True
+            else:
                 from ..docling_chunker import simple_sentence_chunk
                 chunks = simple_sentence_chunk(extracted_text, max_chunk_size=1000)
                 used_engine = "simple"
-                debug_info = {"error": str(e)}
-        else:
-            from ..docling_chunker import simple_sentence_chunk
-            chunks = simple_sentence_chunk(extracted_text, max_chunk_size=1000)
-            used_engine = "simple"
-            debug_info = {"note": "simple engine selected"}
+                if not debug_info:
+                    debug_info = {"note": "simple engine selected", **fallback_info}
+                processed = True
 
         resp = {
             "document_id": document_id,
@@ -319,6 +356,8 @@ async def get_document_chunks(
             "debug": debug_info,
         }
         # Route-level log for visibility
+        if resp.get("debug") and isinstance(resp["debug"], dict) and resp["debug"].get("oddadmix_error"):
+            print(f"[chunks-route] Oddadmix error detail: {resp['debug']['oddadmix_error']}")
         print(f"[chunks-route] document_id={document_id} requested_engine={engine} used_engine={used_engine} chunks={len(chunks)}")
         return resp
     except HTTPException:

@@ -70,8 +70,9 @@ DEV_MODE = "shared"  # Always shared mode for team collaboration
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'shared_uploads')
 
 # Chunking/Vector configuration
-# Use 'docling' to enable Docling-based advanced chunking
-CHUNKING_ENGINE = os.getenv("CHUNKING_ENGINE", "docling")  # options: 'docling', 'chroma'
+# Default to 'oddadmix' engine; keep 'docling' available
+# Options: 'oddadmix', 'docling', 'chroma'
+CHUNKING_ENGINE = os.getenv("CHUNKING_ENGINE", "oddadmix").lower()
 # When False, vector DB (Chroma) remains present but is not used
 USE_VECTOR_DB = os.getenv("USE_VECTOR_DB", "false").lower() in ("1", "true", "yes")
 
@@ -80,6 +81,10 @@ USE_VECTOR_DB = os.getenv("USE_VECTOR_DB", "false").lower() in ("1", "true", "ye
 DOCLING_PREFER_TEXT = os.getenv("DOCLING_PREFER_TEXT", "true").lower() in ("1", "true", "yes")
 # Choose chunker: 'hierarchical' (fast, structure-aware) or 'hybrid' (token-aware, slower and may download extra models)
 DOCLING_CHUNKER_MODE = os.getenv("DOCLING_CHUNKER_MODE", "hierarchical").lower()
+
+# Oddadmix chunking parameters
+ODDADMIX_CHUNK_SIZE = int(os.getenv("ODDADMIX_CHUNK_SIZE", "1000"))
+ODDADMIX_CHUNK_OVERLAP = int(os.getenv("ODDADMIX_CHUNK_OVERLAP", "200"))
 
 # Graph Database configuration
 USE_GRAPH_DB = os.getenv("USE_GRAPH_DB", "false").lower() in ("1", "true", "yes")

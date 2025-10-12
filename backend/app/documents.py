@@ -10,7 +10,13 @@ from .utils import (
     generate_document_id, 
     save_file_to_disk
 )
-from .config import CHUNKING_ENGINE, USE_VECTOR_DB, USE_GRAPH_DB
+from .config import (
+    CHUNKING_ENGINE,
+    USE_VECTOR_DB,
+    USE_GRAPH_DB,
+    ODDADMIX_CHUNK_SIZE,
+    ODDADMIX_CHUNK_OVERLAP,
+)
 from .docling_chunker import chunk_text_with_docling
 from .graph_db import graph_client
 from .entity_extraction import extract_entities
@@ -67,9 +73,21 @@ async def upload_document(file: UploadFile = File(...), organization_id: int = N
         # Add to persistent document store (initial save)
         document_store.add_document(doc_id, doc_data)
         
-        # Chunk the document with the selected engine
+        # Chunk the document with the selected engine (oddadmix default)
         if extracted_text:
-            if CHUNKING_ENGINE == "docling":
+            if CHUNKING_ENGINE == "oddadmix":
+                try:
+                    from .oddadmix_chunker import chunk_text_with_oddadmix, oddadmix_available
+                    if oddadmix_available():
+                        chunks, used_engine = chunk_text_with_oddadmix(extracted_text, ODDADMIX_CHUNK_SIZE, ODDADMIX_CHUNK_OVERLAP)[:2]
+                        print(f"🧠 Chunking for '{file.filename}' done with engine: {used_engine}")
+                    else:
+                        raise RuntimeError("Oddadmix package not available; fallback to docling")
+                except Exception as e:
+                    print(f"⚠️ Oddadmix chunking failed or unavailable, falling back to Docling: {e}")
+                    from .docling_chunker import chunk_text_with_docling
+                    chunks, used_engine = chunk_text_with_docling(file_path, extracted_text, max_chunk_size=1000)
+            elif CHUNKING_ENGINE == "docling":
                 chunks, used_engine = chunk_text_with_docling(file_path, extracted_text, max_chunk_size=1000)
                 print(f"🧠 Chunking for '{file.filename}' done with engine: {used_engine}")
             else:
@@ -77,6 +95,12 @@ async def upload_document(file: UploadFile = File(...), organization_id: int = N
                 from .vector_db import VectorDatabase
                 chunks = VectorDatabase()._split_text_into_chunks(extracted_text, max_chunk_size=1000)
             doc_data["chunk_count"] = len(chunks)
+            # Persist which engine produced these chunks for audit/debug
+            try:
+                doc_data["used_engine"] = used_engine
+            except Exception:
+                # If used_engine not defined for some reason, leave unchanged
+                pass
 
             # Optionally index into vector DB (kept but gated)
             if USE_VECTOR_DB:
@@ -88,7 +112,7 @@ async def upload_document(file: UploadFile = File(...), organization_id: int = N
                         "file_type": file.content_type,
                         "file_size": len(content),
                         "uploaded_at": time.time(),
-                        "organization_id": organization_id
+                        "organization_id": organization_id,
                     }
                     vector_db.add_document(doc_id, extracted_text, vector_metadata)
                 except Exception as e:
@@ -124,10 +148,10 @@ async def upload_document(file: UploadFile = File(...), organization_id: int = N
                     print(f"⚠️ Graph DB write skipped due to error: {e}")
         
         # Persist final state (ensure chunk_count and any later updates are saved)
-        try:
-            document_store.add_document(doc_id, doc_data)
-        except Exception:
-            pass
+                    try:
+                        document_store.add_document(doc_id, doc_data)
+                    except Exception:
+                        pass
 
         return doc_data
         

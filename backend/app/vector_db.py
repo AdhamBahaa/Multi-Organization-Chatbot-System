@@ -7,7 +7,7 @@ import os
 import re
 from typing import List, Dict, Optional
 
-from .config import UPLOAD_DIR, USE_VECTOR_DB
+from .config import UPLOAD_DIR, USE_VECTOR_DB, CHUNKING_ENGINE, ODDADMIX_CHUNK_SIZE, ODDADMIX_CHUNK_OVERLAP
 
 
 class VectorDatabase:
@@ -66,13 +66,33 @@ class VectorDatabase:
             print("⚠️ Vector database not available, skipping document addition")
             return False
         try:
-            # Prefer Docling chunking for consistency across pipeline; fallback to simple
-            try:
-                from .docling_chunker import chunk_text_with_docling
-                # No PDF path available in this context; use text-only Docling path
-                chunks, _ = chunk_text_with_docling(pdf_path="", text=text, max_chunk_size=1000)
-            except Exception:
-                chunks = self._split_text_into_chunks(text)
+            # Prefer Oddadmix if selected, else Docling; fallback to simple
+            chunks = []
+            used_engine = None
+            if CHUNKING_ENGINE == "oddadmix":
+                try:
+                    from .oddadmix_chunker import chunk_text_with_oddadmix, oddadmix_available
+                    if oddadmix_available():
+                        chunks, used_engine, odd_debug = chunk_text_with_oddadmix(
+                            text,
+                            ODDADMIX_CHUNK_SIZE,
+                            ODDADMIX_CHUNK_OVERLAP,
+                        )
+                        impl = odd_debug.get("impl") if isinstance(odd_debug, dict) else None
+                        print(f"🧩 Vector index chunking via Oddadmix ({impl or 'unknown impl'}) → {len(chunks)} chunks")
+                    else:
+                        raise RuntimeError("Oddadmix not available")
+                except Exception:
+                    pass
+            if not chunks:
+                try:
+                    from .docling_chunker import chunk_text_with_docling
+                    chunks, used_engine = chunk_text_with_docling(pdf_path="", text=text, max_chunk_size=1000)
+                    print(f"🧩 Vector index chunking via {used_engine} → {len(chunks)} chunks")
+                except Exception:
+                    chunks = self._split_text_into_chunks(text)
+                    used_engine = "simple"
+                    print(f"🧩 Vector index chunking via simple fallback → {len(chunks)} chunks")
             for i, chunk in enumerate(chunks):
                 chunk_id = f"{doc_id}_chunk_{i}"
                 self.collection.add(
@@ -80,6 +100,8 @@ class VectorDatabase:
                     metadatas=[{**metadata, "chunk_index": i, "total_chunks": len(chunks), "chunk_id": chunk_id}],
                     ids=[chunk_id],
                 )
+            if used_engine:
+                print(f"✅ Indexed document {doc_id} using engine '{used_engine}' with {len(chunks)} chunks")
             return True
         except Exception as e:  # pragma: no cover - defensive
             print(f"Error adding document to vector DB: {e}")
