@@ -128,6 +128,8 @@ class ChatResponse(BaseModel):
     sources: List[dict] = []
     confidence: float = 0.0
     chunks_found: int = 0
+    # Live debugging info about retrieval: which chunks, from which DB, ids, etc.
+    debug: Optional[dict] = None
 
 # Chat History Models
 class ChatSessionResponse(BaseModel):

@@ -116,6 +116,14 @@ HYBRID_RRF_K = int(os.getenv("HYBRID_RRF_K", "60"))
 # Limit how many chunks per document we include in the final prompt context
 HYBRID_MAX_CHUNKS_PER_DOC = int(os.getenv("HYBRID_MAX_CHUNKS_PER_DOC", "6"))
 
+# Debug and logging verbosity (0=silent, 1=compact, 2=verbose)
+DEBUG_VERBOSITY = int(os.getenv("DEBUG_VERBOSITY", "2"))
+
+# Readability: control chunk title generation and entity filtering
+CHUNK_TITLE_MAX_WORDS = int(os.getenv("CHUNK_TITLE_MAX_WORDS", "8"))
+# When false, numeric-only entities will be ignored for graph display and storage
+GRAPH_INCLUDE_NUMERIC_ENTITIES = os.getenv("GRAPH_INCLUDE_NUMERIC_ENTITIES", "false").lower() in ("1", "true", "yes")
+
 # Post-generation validation
 ENABLE_LC_VALIDATION = os.getenv("ENABLE_LC_VALIDATION", "true").lower() in ("1", "true", "yes")
 # Max allowed characters in final response (acts as a guardrail; 0 disables)

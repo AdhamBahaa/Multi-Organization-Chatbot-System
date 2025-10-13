@@ -3,6 +3,7 @@ Lightweight entity extraction: regex and simple patterns.
 Keeps dependencies minimal; you can swap with spaCy or an LLM later.
 """
 import re
+from .config import GRAPH_INCLUDE_NUMERIC_ENTITIES
 from typing import List, Tuple
 
 
@@ -24,8 +25,9 @@ def extract_entities(text: str) -> List[Tuple[str, str]]:
         entities.append(("URL", m))
 
     # Numbers (up to 6 digits)
-    for m in re.findall(r"\b\d{1,6}\b", text):
-        entities.append(("Number", m))
+    if GRAPH_INCLUDE_NUMERIC_ENTITIES:
+        for m in re.findall(r"\b\d{1,6}\b", text):
+            entities.append(("Number", m))
 
     # Date-like (very rough)
     for m in re.findall(r"\b(?:\d{1,2}/\d{1,2}/\d{2,4}|\d{4}-\d{2}-\d{2})\b", text):

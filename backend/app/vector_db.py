@@ -7,7 +7,7 @@ import os
 import re
 from typing import List, Dict, Optional
 
-from .config import UPLOAD_DIR, USE_VECTOR_DB, CHUNKING_ENGINE, ODDADMIX_CHUNK_SIZE, ODDADMIX_CHUNK_OVERLAP
+from .config import UPLOAD_DIR, USE_VECTOR_DB, CHUNKING_ENGINE, ODDADMIX_CHUNK_SIZE, ODDADMIX_CHUNK_OVERLAP, DEBUG_VERBOSITY, CHUNK_TITLE_MAX_WORDS
 
 
 class VectorDatabase:
@@ -93,11 +93,23 @@ class VectorDatabase:
                     chunks = self._split_text_into_chunks(text)
                     used_engine = "simple"
                     print(f"🧩 Vector index chunking via simple fallback → {len(chunks)} chunks")
+            def _make_title(s: str) -> str:
+                # Build a short human-friendly title from the first sentence/words
+                t = (s or "").strip().replace("\n", " ")
+                # Strip leading punctuation and common fillers
+                t = re.sub(r"^[\-•*\s]+", "", t)
+                words = [w for w in re.split(r"\s+", t) if w]
+                snippet = " ".join(words[:CHUNK_TITLE_MAX_WORDS])
+                # Normalize extreme lengths and punctuation
+                snippet = snippet.strip(". ,;:•-_")
+                return (snippet or f"chunk {i}")[:120]
+
             for i, chunk in enumerate(chunks):
                 chunk_id = f"{doc_id}_chunk_{i}"
+                title = _make_title(chunk)
                 self.collection.add(
                     documents=[chunk],
-                    metadatas=[{**metadata, "chunk_index": i, "total_chunks": len(chunks), "chunk_id": chunk_id}],
+                    metadatas=[{**metadata, "chunk_index": i, "total_chunks": len(chunks), "chunk_id": chunk_id, "chunk_title": title}],
                     ids=[chunk_id],
                 )
             if used_engine:
@@ -128,16 +140,24 @@ class VectorDatabase:
             }
             if organization_id is not None:
                 query_params["where"] = {"organization_id": organization_id}
-                print(f"🔍 Filtering search to organization {organization_id}")
+                if DEBUG_VERBOSITY >= 2:
+                    print(f"🔍 Filtering search to organization {organization_id}")
 
-            print(f"🔍 Executing vector search with {n_results} results...")
+            if DEBUG_VERBOSITY >= 1:
+                print(f"🔍 Executing vector search with {n_results} results...")
             results = self.collection.query(**query_params)
 
             search_results: List[Dict] = []
+            def _make_title(s: str) -> str:
+                t = (s or "").strip().replace("\n", " ")
+                t = re.sub(r"^[\-•*\s]+", "", t)
+                words = [w for w in re.split(r"\s+", t) if w]
+                snippet = " ".join(words[:CHUNK_TITLE_MAX_WORDS])
+                snippet = snippet.strip(". ,;:•-_")
+                return (snippet or "chunk")[0:120]
             if results.get("documents") and results["documents"][0]:
-                print(
-                    f"✅ Vector search returned {len(results['documents'][0])} results"
-                )
+                if DEBUG_VERBOSITY >= 1:
+                    print(f"✅ Vector search returned {len(results['documents'][0])} results")
                 for i, (doc, metadata, distance) in enumerate(
                     zip(
                         results["documents"][0],
@@ -149,21 +169,23 @@ class VectorDatabase:
                     if is_arabic_query and re.search(r"\d+", doc):
                         relevance_score = min(1.0, relevance_score + 0.1)
 
+                    # Ensure a human-friendly title exists even if old data lacks it
+                    title = metadata.get("chunk_title") or _make_title(doc)
                     search_results.append(
                         {
                             "document_id": metadata.get("document_id", ""),
                             "filename": metadata.get("filename", ""),
                             "chunk": doc,
                             "chunk_index": metadata.get("chunk_index", 0),
+                            "chunk_title": title,
                             "relevance_score": relevance_score,
                             "metadata": metadata,
                         }
                     )
-                    print(
-                        f"  Result {i+1}: {metadata.get('filename', 'Unknown')} (relevance: {relevance_score:.3f})"
-                    )
-                    if is_arabic_query and re.search(r"\d+", doc):
-                        print("    📊 Contains numbers/statistics - relevance boosted")
+                    if DEBUG_VERBOSITY >= 2:
+                        print(f"  Result {i+1}: {metadata.get('filename', 'Unknown')} (relevance: {relevance_score:.3f})")
+                        if is_arabic_query and re.search(r"\d+", doc):
+                            print("    📊 Contains numbers/statistics - relevance boosted")
             else:
                 print("⚠️ Vector search returned no results")
             return search_results

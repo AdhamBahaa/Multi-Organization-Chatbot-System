@@ -16,6 +16,8 @@ from .config import (
     ENABLE_HYBRID_RETRIEVAL,
     HYBRID_RRF_K,
     HYBRID_MAX_CHUNKS_PER_DOC,
+    DEBUG_VERBOSITY,
+    GRAPH_INCLUDE_NUMERIC_ENTITIES,
 )
 import re
 
@@ -89,19 +91,31 @@ def extract_text_from_file(file_content: bytes, content_type: str, filename: str
         return f"File uploaded: {filename}. Content extraction failed: {str(e)}"
 
 def search_documents(query: str, organization_id: int = None) -> List[dict]:
-    """Search documents. If vector DB is disabled, skip Chroma and use fallback."""
-    print(f"🔍 Searching for: '{query}' in organization {organization_id}")
+    """Search documents. If vector DB is disabled, skip Chroma and use fallback.
+
+    Returns a list of dicts per document with keys:
+    - document_id, filename, chunks, relevance, chunk_ids (from vector search)
+    - graph_context (optional)
+    Also prints logs for live debugging.
+    """
+    if DEBUG_VERBOSITY >= 1:
+        print(f"🔍 Searching for: '{query}' in organization {organization_id}")
 
     vector_results: List[dict] = []
+    debug_timings = {}
     if USE_VECTOR_DB:
         try:
             from .vector_db import vector_db
+            t0 = time.time()
             vector_results = vector_db.search_documents(query, n_results=10, organization_id=organization_id)
-            print(f"📊 Vector search returned {len(vector_results)} results")
+            debug_timings["vector_ms"] = int((time.time() - t0) * 1000)
+            if DEBUG_VERBOSITY >= 1:
+                print(f"📊 Vector search returned {len(vector_results)} results in {debug_timings['vector_ms']}ms")
         except Exception as e:
             print(f"⚠️ Vector search error, will fallback: {e}")
     else:
-        print("ℹ️ Vector DB disabled by config; using enhanced fallback search only")
+        if DEBUG_VERBOSITY >= 1:
+            print("ℹ️ Vector DB disabled by config; using enhanced fallback search only")
 
     # If vector search disabled/failed or returns no results, use enhanced fallback
     if not vector_results:
@@ -117,20 +131,36 @@ def search_documents(query: str, organization_id: int = None) -> List[dict]:
                 'filename': result['filename'],
                 'chunks': [],
                 'chunk_ids': [],
-                'relevance': 0
+                'relevance': 0,
+                # Detailed sources for debugging
+                'vector_chunks': [],
+                'vector_chunk_ids': [],
+                'vector_chunk_titles': [],
+                'graph_entities': [],
+                'graph_neighbors': [],
+                'graph_context': "",
             }
         
         document_results[doc_id]['chunks'].append(result['chunk'])
+        document_results[doc_id]['vector_chunks'].append(result['chunk'])
         document_results[doc_id]['relevance'] += result['relevance_score']
         # Preserve chunk_id if present in metadata
         meta = result.get('metadata', {})
         cid = meta.get('chunk_id')
         if cid:
             document_results[doc_id]['chunk_ids'].append(cid)
+            document_results[doc_id]['vector_chunk_ids'].append(cid)
+        # Preserve title if present
+        title = result.get('chunk_title') or meta.get('chunk_title')
+        if title:
+            document_results[doc_id]['vector_chunk_titles'].append(title)
     
     # Convert to list and sort by relevance
     results = list(document_results.values())
     results.sort(key=lambda x: x['relevance'], reverse=True)
+    if DEBUG_VERBOSITY >= 1 and results:
+        top = results[0]
+        print(f"📄 Found {len(results)} docs; top: {top['filename']} (rel {top['relevance']:.3f})")
 
     # Optional: fuse with a simple keyword rank using Reciprocal Rank Fusion (RRF)
     if ENABLE_HYBRID_RETRIEVAL:
@@ -139,6 +169,9 @@ def search_documents(query: str, organization_id: int = None) -> List[dict]:
             # Gather org documents
             if organization_id is not None:
                 all_documents = document_store.get_documents_by_organization(organization_id)
+                if DEBUG_VERBOSITY >= 2:
+                    print(f"🔍 Filtering documents for organization {organization_id}")
+                    print(f"   Documents matching organization {len(all_documents)}")
             else:
                 all_documents = document_store.get_all_documents()
             # Precompute a keyword score per document
@@ -202,6 +235,9 @@ def search_documents(query: str, organization_id: int = None) -> List[dict]:
                         relation = nb.get('relation')
                         if name and relation:
                             neighbors.append(f"{relation}: {name}")
+                # Optionally filter out numeric-only entities for readability
+                if not GRAPH_INCLUDE_NUMERIC_ENTITIES:
+                    entities = {e for e in entities if not re.fullmatch(r"\d+", e)}
                 entities_list = sorted(entities)
                 graph_context = ""
                 if entities_list:
@@ -211,6 +247,8 @@ def search_documents(query: str, organization_id: int = None) -> List[dict]:
                         graph_context += "\n"
                     graph_context += "Related facts: " + "; ".join(neighbors[:15])
                 doc['graph_context'] = graph_context
+                doc['graph_entities'] = entities_list
+                doc['graph_neighbors'] = neighbors[:15]
         except Exception as e:
             print(f"⚠️ Graph expansion skipped due to error: {e}")
     
@@ -219,20 +257,24 @@ def search_documents(query: str, organization_id: int = None) -> List[dict]:
         if isinstance(r.get('chunks'), list) and len(r['chunks']) > HYBRID_MAX_CHUNKS_PER_DOC:
             r['chunks'] = r['chunks'][:HYBRID_MAX_CHUNKS_PER_DOC]
 
-    print(f"📄 Found {len(results)} documents with relevant content")
+    if DEBUG_VERBOSITY >= 1:
+        print(f"📄 Found {len(results)} documents with relevant content")
     return results
 
 def enhanced_fallback_search_documents(query: str, organization_id: int = None) -> List[dict]:
     """Enhanced fallback search with multi-language keyword mapping"""
-    print("🔄 Using enhanced fallback search with multi-language support...")
+    if DEBUG_VERBOSITY >= 1:
+        print("🔄 Using enhanced fallback search with multi-language support...")
     
     # Get documents from document store (filtered by organization if specified)
     if organization_id is not None:
         all_documents = document_store.get_documents_by_organization(organization_id)
-        print(f"📚 Total documents in organization {organization_id}: {len(all_documents)}")
+        if DEBUG_VERBOSITY >= 1:
+            print(f"📚 Total documents in organization {organization_id}: {len(all_documents)}")
     else:
         all_documents = document_store.get_all_documents()
-        print(f"📚 Total documents in store: {len(all_documents)}")
+        if DEBUG_VERBOSITY >= 1:
+            print(f"📚 Total documents in store: {len(all_documents)}")
     
     # Multi-language keyword mapping for common terms
     keyword_mapping = {
@@ -322,7 +364,8 @@ def enhanced_fallback_search_documents(query: str, organization_id: int = None) 
         # For English queries, use the query as is
         search_keywords = [query.lower()]
     
-    print(f"🔍 Searching with keywords: {search_keywords}")
+    if DEBUG_VERBOSITY >= 2:
+        print(f"🔍 Searching with keywords: {search_keywords}")
     
     results = []
     
@@ -330,7 +373,8 @@ def enhanced_fallback_search_documents(query: str, organization_id: int = None) 
         # Check if document has extracted text
         if 'extracted_text' in doc and doc['extracted_text']:
             text = doc['extracted_text'].lower()
-            print(f"🔍 Searching in: {doc['filename']} ({len(text)} characters)")
+            if DEBUG_VERBOSITY >= 2:
+                print(f"🔍 Searching in: {doc['filename']} ({len(text)} characters)")
             
             # Check if any of the search keywords are in the document
             found_keywords = []
@@ -339,7 +383,8 @@ def enhanced_fallback_search_documents(query: str, organization_id: int = None) 
                     found_keywords.append(keyword)
             
             if found_keywords:
-                print(f"✅ Found keywords in {doc['filename']}: {found_keywords}")
+                if DEBUG_VERBOSITY >= 2:
+                    print(f"✅ Found keywords in {doc['filename']}: {found_keywords}")
                 
                 # Split text into chunks and find relevant sentences
                 chunks = []
@@ -365,13 +410,17 @@ def enhanced_fallback_search_documents(query: str, organization_id: int = None) 
                         'chunks': chunks[:5],  # Limit to 5 chunks
                         'relevance': relevance
                     })
-                    print(f"✅ Added {doc['filename']} with {len(chunks)} chunks (relevance: {relevance:.2f})")
+                    if DEBUG_VERBOSITY >= 2:
+                        print(f"✅ Added {doc['filename']} with {len(chunks)} chunks (relevance: {relevance:.2f})")
             else:
-                print(f"❌ No keywords found in: {doc['filename']}")
+                if DEBUG_VERBOSITY >= 2:
+                    print(f"❌ No keywords found in: {doc['filename']}")
         else:
-            print(f"⚠️ No extracted text in: {doc['filename']}")
+            if DEBUG_VERBOSITY >= 2:
+                print(f"⚠️ No extracted text in: {doc['filename']}")
     
-    print(f"📄 Enhanced fallback search found {len(results)} documents")
+    if DEBUG_VERBOSITY >= 1:
+        print(f"📄 Enhanced fallback search found {len(results)} documents")
     return results
 
 def generate_document_id(filename: str) -> str:

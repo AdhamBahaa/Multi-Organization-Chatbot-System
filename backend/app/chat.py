@@ -4,7 +4,7 @@ Chat functionality module for the RAG Chatbot Backend
 import google.generativeai as genai
 from .models import ChatRequest, ChatResponse
 from .utils import search_documents
-from .config import API_KEY
+from .config import API_KEY, DEBUG_VERBOSITY
 from .database import ChatSession, ChatMessage
 import re
 import time
@@ -103,27 +103,44 @@ Remember: Your response must be entirely in {detected_language} language and use
 async def generate_chat_response(chat_data: ChatRequest, organization_id: int = None) -> ChatResponse:
     """Generate AI-powered response with RAG functionality and English/Arabic language support"""
     
-    print(f"🤖 Generating response for: '{chat_data.message}' in organization {organization_id}")
+    if DEBUG_VERBOSITY >= 1:
+        print(f"🤖 Generating response for: '{chat_data.message}' in organization {organization_id}")
     
     # Detect the language of the user's question (English or Arabic)
     detected_language = detect_language(chat_data.message)
-    print(f"🌍 Detected language: {detected_language}")
+    if DEBUG_VERBOSITY >= 1:
+        print(f"🌍 Detected language: {detected_language}")
     
     # Search through uploaded documents (filtered by organization)
     # The vector database now supports English and Arabic document search
     search_results = search_documents(chat_data.message, organization_id)
-    print(f"📋 Search returned {len(search_results)} document results")
+    if DEBUG_VERBOSITY >= 1:
+        print(f"📋 Search returned {len(search_results)} document results")
     
     # Debug: Print search results for troubleshooting
-    for i, result in enumerate(search_results):
-        print(f"  Result {i+1}: {result['filename']} (relevance: {result['relevance']:.3f})")
-        print(f"    Chunks: {len(result['chunks'])}")
-        if result['chunks']:
-            print(f"    Sample chunk: {result['chunks'][0][:100]}...")
+    if DEBUG_VERBOSITY >= 2:
+        for i, result in enumerate(search_results):
+            print(f"  Result {i+1}: {result['filename']} (relevance: {result['relevance']:.3f})")
+            print(f"    Chunks: {len(result['chunks'])}")
+            if result['chunks']:
+                print(f"    Sample chunk: {result['chunks'][0][:100]}...")
     
     # Prepare context from documents (vector chunks + optional graph expansion)
     document_context = ""
     sources = []
+    # Live retrieval debug container
+    debug_info = {
+        "docs_considered": len(search_results),
+        "documents": [],
+        "all_chunk_ids": [],
+        "total_chunks_used": 0,
+    }
+    # Heuristic: if results have chunk_ids, vector retrieval was used; otherwise fallback
+    try:
+        has_chunk_ids = any(isinstance(r.get('chunk_ids'), list) and r['chunk_ids'] for r in search_results)
+        debug_info["retrieval_mode"] = "vector" if has_chunk_ids else "fallback"
+    except Exception:
+        debug_info["retrieval_mode"] = "unknown"
     
     if search_results:
         document_context = f"\n\nRelevant information from uploaded documents:\n"
@@ -147,11 +164,68 @@ async def generate_chat_response(chat_data: ChatRequest, organization_id: int = 
                     "filename": result['filename'],
                     "relevance": result['relevance']
                 })
+                # Collect per-document debug info
+                doc_chunk_ids = result.get('chunk_ids', []) or []
+                vector_chunk_ids = result.get('vector_chunk_ids', []) or []
+                vector_chunks = result.get('vector_chunks', []) or []
+                vector_titles = result.get('vector_chunk_titles', []) or []
+                graph_entities = result.get('graph_entities', []) or []
+                graph_neighbors = result.get('graph_neighbors', []) or []
+                doc_debug_entry = {
+                    "document_id": result.get("document_id"),
+                    "filename": result.get("filename"),
+                    "relevance": result.get("relevance"),
+                    "num_chunks": len(result.get("chunks", [])),
+                    "chunk_ids": doc_chunk_ids,
+                    # Parallel list of human-friendly titles for the vector chunks (best effort)
+                    "chunk_titles": result.get("vector_chunk_titles", []) or [],
+                    # The exact text chunks included in the prompt context
+                    "chunks": result.get("chunks", []),
+                    "vector": {
+                        "chunk_ids": vector_chunk_ids,
+                        "chunks": vector_chunks,
+                        "titles": vector_titles,
+                    },
+                    "graph": {
+                        "entities": graph_entities,
+                        "neighbors": graph_neighbors,
+                        "context": result.get("graph_context", ""),
+                    }
+                }
+                debug_info["documents"].append(doc_debug_entry)
+                debug_info["all_chunk_ids"].extend(doc_chunk_ids)
+                debug_info["total_chunks_used"] += len(result.get("chunks", []))
+
+                # Optional verbose preview in logs
+                if DEBUG_VERBOSITY >= 2:
+                    try:
+                        used_chunks = result.get("chunks", [])
+                        print(f"🧩 Chunks chosen from {result.get('filename')}: {len(used_chunks)}")
+                        for idx, ch in enumerate(used_chunks[:3]):
+                            cid = (vector_chunk_ids[idx] if idx < len(vector_chunk_ids) else 'n/a')
+                            title = (vector_titles[idx] if idx < len(vector_titles) and vector_titles[idx] else 'chunk')
+                            preview = ch.strip().replace('\n', ' ')[:120]
+                            # Show human-friendly title first, keep id for traceability
+                            print(f"   • [{idx}] {title} (id={cid}) → {preview}{'…' if len(ch) > 120 else ''}")
+                    except Exception:
+                        pass
         
         sources = relevant_sources  # Only include highly relevant sources
-        print(f"📄 Using context from {len(sources)} highly relevant documents")
+        if DEBUG_VERBOSITY >= 1:
+            names = ", ".join(s.get("filename", "?") for s in sources)
+            # Build a concise retrieval summary from debug_info
+            try:
+                vec_chunks = sum(len(d.get("vector", {}).get("chunk_ids", []) or []) for d in debug_info.get("documents", []))
+                graph_entities = sum(len(d.get("graph", {}).get("entities", []) or []) for d in debug_info.get("documents", []))
+                graph_neighbors = sum(len(d.get("graph", {}).get("neighbors", []) or []) for d in debug_info.get("documents", []))
+                mode = debug_info.get("retrieval_mode", "unknown")
+                print(f"📄 Using context from {len(sources)} docs: {names}")
+                print(f"🧭 Retrieval summary → mode={mode}, vectorChunks={vec_chunks}, graphEntities={graph_entities}, graphNeighbors={graph_neighbors}")
+            except Exception:
+                print(f"📄 Using context from {len(sources)} docs: {names}")
     else:
-        print("⚠️ No relevant documents found")
+        if DEBUG_VERBOSITY >= 1:
+            print("⚠️ No relevant documents found")
         document_context = f"\n\nNo relevant information found in uploaded documents."
     
     # Generate response using Gemini with enhanced English/Arabic language prompt
@@ -174,8 +248,8 @@ async def generate_chat_response(chat_data: ChatRequest, organization_id: int = 
             ai_response = response.text.strip()
             
             # Debug: Print the raw AI response before cleanup
-            print(f"🔍 Raw AI response: {repr(ai_response)}")
-            
+            if DEBUG_VERBOSITY >= 2:
+                print(f"🔍 Raw AI response: {repr(ai_response)}")
             # Clean up any remaining Markdown formatting to ensure plain text
             # This removes asterisks, bold formatting, and converts any remaining Markdown to clean text
             # Remove Markdown formatting (Unicode-aware)
@@ -190,7 +264,8 @@ async def generate_chat_response(chat_data: ChatRequest, organization_id: int = 
             ai_response = ai_response.strip()
             
             # Debug: Print the cleaned AI response
-            print(f"🔍 Cleaned AI response: {repr(ai_response)}")
+            if DEBUG_VERBOSITY >= 2:
+                print(f"🔍 Cleaned AI response: {repr(ai_response)}")
 
             # LangChain-based validation and correction
             try:
@@ -271,7 +346,8 @@ async def generate_chat_response(chat_data: ChatRequest, organization_id: int = 
         message_id=message_id,
         sources=sources,
         confidence=confidence,
-        chunks_found=len(search_results)
+        chunks_found=debug_info.get("total_chunks_used", len(search_results)),
+        debug=debug_info
     )
 
 async def get_user_sessions():
