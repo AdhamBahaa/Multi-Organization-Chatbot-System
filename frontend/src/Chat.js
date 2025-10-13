@@ -1,7 +1,13 @@
 import React, { useState, useRef, useEffect } from "react";
-import { sendMessage, submitFeedback } from "./api";
+import {
+  sendMessage,
+  submitFeedback,
+  expandGraph,
+  searchGraphEntities,
+} from "./api";
 import ChatHistory from "./components/ChatHistory";
 import "./Chat.css";
+import GraphExplorer from "./components/GraphExplorer";
 
 function Chat({ user }) {
   const [messages, setMessages] = useState([]);
@@ -29,6 +35,9 @@ function Chat({ user }) {
   const startSilenceDetectionRef = useRef(null); // Ref for silence detection function
   const isLanguageSwitchingRef = useRef(false); // Ref for language switching state
   const [showChatHistory, setShowChatHistory] = useState(false); // Show/hide chat history
+  const [showGraph, setShowGraph] = useState(false);
+  const [graphData, setGraphData] = useState({ nodes: [], edges: [] });
+  const [graphLoading, setGraphLoading] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -122,6 +131,10 @@ function Chat({ user }) {
 
   const toggleChatHistory = () => {
     setShowChatHistory(!showChatHistory);
+  };
+
+  const toggleGraph = () => {
+    setShowGraph(!showGraph);
   };
 
   const closeFeedbackModal = () => {
@@ -433,6 +446,37 @@ function Chat({ user }) {
       };
 
       setMessages((prev) => [...prev, botMessage]);
+
+      // Try to visualize nearest entities/nodes of the used context
+      if (response?.debug) {
+        try {
+          setGraphLoading(true);
+          const chunkIds = [];
+          if (Array.isArray(response.debug.documents)) {
+            response.debug.documents.forEach((d) => {
+              if (Array.isArray(d.chunk_ids)) {
+                d.chunk_ids.forEach((cid) => chunkIds.push(cid));
+              }
+              if (Array.isArray(d?.vector?.chunk_ids)) {
+                d.vector.chunk_ids.forEach((cid) => chunkIds.push(cid));
+              }
+            });
+          }
+          // Deduplicate and limit
+          const cids = Array.from(new Set(chunkIds)).slice(0, 10);
+          if (cids.length) {
+            const g = await expandGraph({ chunkIds: cids, maxNeighbors: 8 });
+            if (g && (g.nodes?.length || g.edges?.length)) {
+              setGraphData(g);
+              setShowGraph(true);
+            }
+          }
+        } catch (ge) {
+          console.warn("Graph visualization error:", ge?.message || ge);
+        } finally {
+          setGraphLoading(false);
+        }
+      }
     } catch (error) {
       console.error("Chat error:", error);
       setError(error.message);
@@ -660,6 +704,14 @@ function Chat({ user }) {
               <span className="btn-text">History</span>
             </button>
           )}
+          <button
+            onClick={toggleGraph}
+            className="clear-chat-btn"
+            title={showGraph ? "Hide graph" : "Show graph"}
+          >
+            <span className="btn-icon">🕸️</span>
+            <span className="btn-text">Graph</span>
+          </button>
           <button
             onClick={clearChat}
             className="clear-chat-btn"
@@ -1007,6 +1059,117 @@ function Chat({ user }) {
             onLoadSession={handleLoadSession}
             currentSessionId={currentSessionId}
             onClose={() => setShowChatHistory(false)}
+          />
+        </div>
+      )}
+      {showGraph && (
+        <div className="graph-overlay">
+          <GraphExplorer
+            graph={graphData}
+            loading={graphLoading}
+            title="Knowledge Graph"
+            onSearch={async (q) => {
+              if (!q) return;
+              try {
+                setGraphLoading(true);
+                const results = await searchGraphEntities(q, 10);
+                if (results?.length) {
+                  const g = await expandGraph({
+                    entities: results.map((r) => r.id),
+                    maxNeighbors: 8,
+                  });
+                  const existingIds = new Set(graphData.nodes.map((n) => n.id));
+                  const existingEdges = new Set(
+                    graphData.edges.map(
+                      (e) => `${e.source}:${e.target}:${e.label}`
+                    )
+                  );
+                  const merged = {
+                    nodes: [
+                      ...graphData.nodes,
+                      ...g.nodes.filter((n) => !existingIds.has(n.id)),
+                    ],
+                    edges: [
+                      ...graphData.edges,
+                      ...g.edges.filter(
+                        (e) =>
+                          !existingEdges.has(
+                            `${e.source}:${e.target}:${e.label}`
+                          )
+                      ),
+                    ],
+                  };
+                  setGraphData(merged);
+                }
+              } catch (e) {
+                console.warn("Graph search/expand failed:", e?.message || e);
+              } finally {
+                setGraphLoading(false);
+              }
+            }}
+            onExpandEntities={async (entityIds) => {
+              try {
+                setGraphLoading(true);
+                const g = await expandGraph({
+                  entities: entityIds,
+                  maxNeighbors: 8,
+                });
+                const existingIds = new Set(graphData.nodes.map((n) => n.id));
+                const existingEdges = new Set(
+                  graphData.edges.map(
+                    (e) => `${e.source}:${e.target}:${e.label}`
+                  )
+                );
+                const merged = {
+                  nodes: [
+                    ...graphData.nodes,
+                    ...g.nodes.filter((n) => !existingIds.has(n.id)),
+                  ],
+                  edges: [
+                    ...graphData.edges,
+                    ...g.edges.filter(
+                      (e) =>
+                        !existingEdges.has(`${e.source}:${e.target}:${e.label}`)
+                    ),
+                  ],
+                };
+                setGraphData(merged);
+              } catch (e) {
+                console.warn("Expand entities failed:", e?.message || e);
+              } finally {
+                setGraphLoading(false);
+              }
+            }}
+            onExpandChunks={async (chunkIds) => {
+              try {
+                setGraphLoading(true);
+                const g = await expandGraph({ chunkIds, maxNeighbors: 8 });
+                const existingIds = new Set(graphData.nodes.map((n) => n.id));
+                const existingEdges = new Set(
+                  graphData.edges.map(
+                    (e) => `${e.source}:${e.target}:${e.label}`
+                  )
+                );
+                const merged = {
+                  nodes: [
+                    ...graphData.nodes,
+                    ...g.nodes.filter((n) => !existingIds.has(n.id)),
+                  ],
+                  edges: [
+                    ...graphData.edges,
+                    ...g.edges.filter(
+                      (e) =>
+                        !existingEdges.has(`${e.source}:${e.target}:${e.label}`)
+                    ),
+                  ],
+                };
+                setGraphData(merged);
+              } catch (e) {
+                console.warn("Expand chunks failed:", e?.message || e);
+              } finally {
+                setGraphLoading(false);
+              }
+            }}
           />
         </div>
       )}

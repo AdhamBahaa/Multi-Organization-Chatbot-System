@@ -404,3 +404,58 @@ async def graph_document_summary(
         return graph_client.get_document_summary(document_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get graph summary: {str(e)}")
+
+
+# ---------------- Visualization APIs ----------------
+@router.get("/search")
+async def graph_search_entities(q: str, limit: int = 10,
+    current_user: Union[Admin, User] = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not USE_GRAPH_DB:
+        return []
+    try:
+        return graph_client.search_entities(q, limit)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Graph search failed: {str(e)}")
+
+
+@router.post("/expand")
+async def graph_expand(payload: dict,
+    current_user: Union[Admin, User] = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return a small subgraph for visualization.
+    Accepts either {entities: [..], max_neighbors} or {chunk_ids: [..], max_neighbors}.
+    Response: { nodes: [{id,label,type,...}], edges: [{source,target,label}] }
+    """
+    if not USE_GRAPH_DB:
+        return {"nodes": [], "edges": []}
+    try:
+        entities = payload.get("entities") or []
+        chunk_ids = payload.get("chunk_ids") or []
+        k = int(payload.get("max_neighbors", 10))
+        if entities:
+            return graph_client.get_subgraph_for_entities(entities, max_neighbors=k)
+        if chunk_ids:
+            return graph_client.get_subgraph_for_chunks(chunk_ids, max_neighbors=min(k, 5))
+        raise HTTPException(status_code=400, detail="Provide 'entities' or 'chunk_ids'")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Graph expand failed: {str(e)}")
+
+
+@router.get("/ego")
+async def graph_ego(centers: str, depth: int = 1, limit: int = 50,
+    current_user: Union[Admin, User] = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Centers is a comma-separated list of entity names or ids."""
+    if not USE_GRAPH_DB:
+        return {"nodes": [], "edges": []}
+    try:
+        center_list = [c.strip() for c in centers.split(',') if c.strip()]
+        return graph_client.get_ego_network(center_list, depth=depth, limit=limit)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Graph ego failed: {str(e)}")

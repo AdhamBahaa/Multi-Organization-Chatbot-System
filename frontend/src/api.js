@@ -868,4 +868,48 @@ export const getGraphDocumentSummary = async (documentId) => {
   }
 };
 
+// Graph visualization helpers
+export const searchGraphEntities = async (q, limit = 10) => {
+  try {
+    const response = await api.get(`/graph/search`, {
+      params: { q, limit },
+      timeout: 20000,
+    });
+    return response.data; // [{id,name,type}]
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to search entities"));
+  }
+};
+
+export const expandGraph = async ({
+  entities = null,
+  chunkIds = null,
+  maxNeighbors = 10,
+}) => {
+  try {
+    const payload = {};
+    if (entities && entities.length) payload.entities = entities;
+    if (chunkIds && chunkIds.length) payload.chunk_ids = chunkIds;
+    payload.max_neighbors = maxNeighbors;
+    const response = await api.post(`/graph/expand`, payload, {
+      timeout: 40000,
+    });
+    return response.data; // {nodes, edges}
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to expand graph"));
+  }
+};
+
+export const getGraphEgo = async ({ centers, depth = 1, limit = 50 }) => {
+  try {
+    const response = await api.get(`/graph/ego`, {
+      params: { centers: centers.join(","), depth, limit },
+      timeout: 40000,
+    });
+    return response.data; // {nodes, edges}
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to load ego network"));
+  }
+};
+
 export default api;

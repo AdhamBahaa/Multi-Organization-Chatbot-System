@@ -25,6 +25,15 @@ class NoOpGraphClient:
         return {"document_id": doc_id, "chunks": 0, "entities": 0}
     def expand_related_for_chunks(self, chunk_ids: List[str], max_neighbors: int = 5) -> List[Dict]:
         return []
+    # Visualization helpers (no-op)
+    def search_entities(self, q: str, limit: int = 10) -> List[Dict]:
+        return []
+    def get_subgraph_for_entities(self, entities: List[str], max_neighbors: int = 10) -> Dict:
+        return {"nodes": [], "edges": []}
+    def get_subgraph_for_chunks(self, chunk_ids: List[str], max_neighbors: int = 5) -> Dict:
+        return {"nodes": [], "edges": []}
+    def get_ego_network(self, center_entities: List[str], depth: int = 1, limit: int = 30) -> Dict:
+        return {"nodes": [], "edges": []}
 
 try:
     if USE_GRAPH_DB:
@@ -195,6 +204,159 @@ try:
                             session.run(s)
                         except Exception:
                             pass
+
+            # ---------- Visualization helpers ----------
+            def _prop(self, obj, key: str, default=None):
+                """Safely read a property from Neo4j Node/Relationship or dict."""
+                if obj is None:
+                    return default
+                # Dict-like
+                if isinstance(obj, dict):
+                    return obj.get(key, default)
+                # Neo4j types implement __getitem__ for properties
+                try:
+                    return obj[key]
+                except Exception:
+                    # As a last resort, try attribute access
+                    return getattr(obj, key, default)
+
+            def _to_vis(self, records: List[Dict]) -> Dict:
+                nodes = {}
+                edges = set()
+                for rec in records:
+                    # Entities
+                    e = rec.get("e")
+                    if e:
+                        e_id = self._prop(e, "id")
+                        if e_id is not None:
+                            nodes[("Entity", e_id)] = {
+                                "id": e_id,
+                                "label": self._prop(e, "name") or e_id,
+                                "type": "Entity",
+                            }
+                    e2 = rec.get("e2")
+                    if e2:
+                        e2_id = self._prop(e2, "id")
+                        if e2_id is not None:
+                            nodes[("Entity", e2_id)] = {
+                                "id": e2_id,
+                                "label": self._prop(e2, "name") or e2_id,
+                                "type": "Entity",
+                            }
+                    # Chunks
+                    c = rec.get("c")
+                    if c:
+                        c_id = self._prop(c, "id")
+                        if c_id is not None:
+                            nodes[("Chunk", c_id)] = {
+                                "id": c_id,
+                                "label": c_id,
+                                "type": "Chunk",
+                                "text": self._prop(c, "text", ""),
+                            }
+                    # Documents
+                    d = rec.get("d")
+                    if d:
+                        d_id = self._prop(d, "id")
+                        if d_id is not None:
+                            nodes[("Document", d_id)] = {
+                                "id": d_id,
+                                "label": self._prop(d, "filename") or d_id,
+                                "type": "Document",
+                            }
+                    # Edges
+                    r = rec.get("r")
+                    if r and e and e2:
+                        e_id = self._prop(e, "id")
+                        e2_id = self._prop(e2, "id")
+                        rel = self._prop(r, "relation", "RELATED_TO")
+                        if e_id and e2_id:
+                            edges.add((e_id, e2_id, rel))
+                    if c and e:
+                        c_id = self._prop(c, "id")
+                        e_id = self._prop(e, "id")
+                        if c_id and e_id:
+                            edges.add((c_id, e_id, "MENTIONS"))
+                    if d and c:
+                        d_id = self._prop(d, "id")
+                        c_id = self._prop(c, "id")
+                        if d_id and c_id:
+                            edges.add((d_id, c_id, "HAS_CHUNK"))
+                return {
+                    "nodes": list(nodes.values()),
+                    "edges": [
+                        {"source": s, "target": t, "label": lab} for (s, t, lab) in edges
+                    ],
+                }
+
+            def search_entities(self, q: str, limit: int = 10) -> List[Dict]:
+                cypher = (
+                    "MATCH (e:Entity) WHERE toLower(e.name) CONTAINS toLower($q) "
+                    "RETURN e ORDER BY e.name LIMIT $limit"
+                )
+                with self.driver.session() as session:
+                    result = session.run(cypher, q=q, limit=limit)
+                    out: List[Dict] = []
+                    for rec in result:
+                        e = rec["e"]
+                        out.append({
+                            "id": self._prop(e, "id"),
+                            "name": self._prop(e, "name"),
+                            "type": self._prop(e, "type"),
+                        })
+                    return out
+
+            def get_subgraph_for_entities(self, entities: List[str], max_neighbors: int = 10) -> Dict:
+                # entities can be ids (type:name) or names; resolve both
+                cypher = (
+                    "UNWIND $entities as q "
+                    "MATCH (e:Entity) WHERE e.id = q OR e.name = q "
+                    "OPTIONAL MATCH (e)-[r:RELATED_TO]->(e2:Entity) "
+                    "WITH e, r, e2 LIMIT $k "
+                    "RETURN e as e, r as r, e2 as e2"
+                )
+                with self.driver.session() as session:
+                    result = session.run(cypher, entities=entities, k=max_neighbors)
+                    return self._to_vis([record.data() for record in result])
+
+            def get_subgraph_for_chunks(self, chunk_ids: List[str], max_neighbors: int = 5) -> Dict:
+                cypher = (
+                    "UNWIND $cids as cid "
+                    "MATCH (c:Chunk {id: cid}) "
+                    "OPTIONAL MATCH (c)-[:MENTIONS]->(e:Entity) "
+                    "OPTIONAL MATCH (e)-[r:RELATED_TO]->(e2:Entity) "
+                    "OPTIONAL MATCH (d:Document)-[:HAS_CHUNK]->(c) "
+                    "RETURN c as c, e as e, r as r, e2 as e2, d as d"
+                )
+                with self.driver.session() as session:
+                    result = session.run(cypher, cids=chunk_ids)
+                    return self._to_vis([record.data() for record in result])
+
+            def get_ego_network(self, center_entities: List[str], depth: int = 1, limit: int = 50) -> Dict:
+                # bounded BFS on entities graph
+                cypher = (
+                    "UNWIND $centers as q "
+                    "MATCH (e:Entity) WHERE e.id = q OR e.name = q "
+                    "CALL apoc.path.expandConfig(e, {relationshipFilter:'RELATED_TO>', maxLevel:$depth, bfs:true, limit:$limit}) YIELD path "
+                    "WITH path "
+                    "UNWIND relationships(path) as r "
+                    "WITH startNode(r) as e, r as r, endNode(r) as e2 "
+                    "RETURN e as e, r as r, e2 as e2"
+                )
+                with self.driver.session() as session:
+                    try:
+                        result = session.run(cypher, centers=center_entities, depth=depth, limit=limit)
+                        return self._to_vis([record.data() for record in result])
+                    except Exception:
+                        # Fallback without APOC
+                        cypher2 = (
+                            "UNWIND $centers as q "
+                            "MATCH (e:Entity) WHERE e.id = q OR e.name = q "
+                            "OPTIONAL MATCH (e)-[r:RELATED_TO]->(e2:Entity) "
+                            "RETURN e as e, r as r, e2 as e2"
+                        )
+                        res2 = session.run(cypher2, centers=center_entities)
+                        return self._to_vis([record.data() for record in res2])
 
         graph_client = Neo4jGraphClient(GRAPH_DB_URI, GRAPH_DB_USER, GRAPH_DB_PASSWORD)
     else:

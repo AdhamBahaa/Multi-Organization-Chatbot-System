@@ -399,6 +399,21 @@
   animation: typingBounce 1.4s ease-in-out infinite both;
 }
 
+/* Graph overlay: full-height, resizable right panel */
+.graph-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 640px; /* wider default */
+  min-width: 420px;
+  background: #fafafa;
+  border-left: 1px solid #eee;
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.06);
+  z-index: 50;
+  display: flex;
+}
+
 .typing-dots span:nth-child(1) {
   animation-delay: -0.32s;
 }
