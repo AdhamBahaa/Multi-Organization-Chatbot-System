@@ -252,35 +252,45 @@ export const login = async (email, password) => {
     const response = await api.post("/auth/login", { email, password });
     const data = response.data;
 
+    // Debug logging
+    console.log("Login API Response:", data);
+    console.log("Organization Role:", data.organization_role);
+    console.log("System Role:", data.role);
+
     // Store token and user info
+    const userData = {
+      id: data.user_id,
+      email: data.email,
+      full_name: data.full_name,
+      role: data.role,
+      organization_role: data.organization_role,
+      organization_id: data.organization_id,
+      admin_id: data.admin_id,
+    };
+
+    console.log("Storing user data:", userData);
+
     localStorage.setItem("token", data.access_token);
-    localStorage.setItem(
-      "user",
-      JSON.stringify({
-        id: data.user_id,
-        email: data.email,
-        full_name: data.full_name,
-        role: data.role,
-        organization_role: data.organization_role,
-        organization_id: data.organization_id,
-        admin_id: data.admin_id,
-      })
-    );
+    localStorage.setItem("user", JSON.stringify(userData));
 
     // Add session refresh listeners after successful login
     addSessionRefreshListeners();
 
+    const userObject = {
+      id: data.user_id,
+      email: data.email,
+      full_name: data.full_name,
+      role: data.role,
+      organization_role: data.organization_role,
+      organization_id: data.organization_id,
+      admin_id: data.admin_id,
+    };
+
+    console.log("Returning user object:", userObject);
+
     return {
       token: data.access_token,
-      user: {
-        id: data.user_id,
-        email: data.email,
-        full_name: data.full_name,
-        role: data.role,
-        organization_role: data.organization_role,
-        organization_id: data.organization_id,
-        admin_id: data.admin_id,
-      },
+      user: userObject,
     };
   } catch (error) {
     console.error(
@@ -605,6 +615,16 @@ export const sendMessage = async (message, sessionId = null) => {
   }
 };
 
+// Feedback API
+export const submitFeedback = async (payload) => {
+  try {
+    const response = await api.post("/feedback/submit", payload);
+    return response.data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to submit feedback"));
+  }
+};
+
 export const getChatSessions = async () => {
   try {
     const response = await api.get("/sessions");
@@ -622,6 +642,36 @@ export const getSessionMessages = async (sessionId) => {
   } catch (error) {
     console.error("Messages error:", error);
     return [];
+  }
+};
+
+// Chat history API used by ChatHistory component
+export const getUserSessions = async () => {
+  try {
+    const response = await api.get("/sessions");
+    return response.data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to load sessions"));
+  }
+};
+
+export const getSessionHistory = async (sessionId) => {
+  try {
+    const response = await api.get(`/sessions/${sessionId}`);
+    return response.data;
+  } catch (error) {
+    throw new Error(
+      extractErrorMessage(error, "Failed to load session history")
+    );
+  }
+};
+
+export const deleteSession = async (sessionId) => {
+  try {
+    const response = await api.delete(`/sessions/${sessionId}`);
+    return response.data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to delete session"));
   }
 };
 
@@ -670,6 +720,44 @@ export const deleteDocument = async (documentId) => {
   }
 };
 
+// Documents: chunks viewer
+export const getDocumentChunks = async (documentId, engine = "oddadmix") => {
+  try {
+    const timeout =
+      engine && String(engine).startsWith("docling") ? 120000 : 30000;
+    const response = await api.get(`/documents/${documentId}/chunks`, {
+      params: { engine },
+      timeout,
+    });
+    return response.data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to load chunks"));
+  }
+};
+
+// Admin Feedback API
+export const getUsersFeedback = async () => {
+  try {
+    const response = await api.get("/feedback/admin/users-feedback");
+    return response.data;
+  } catch (error) {
+    throw new Error(
+      extractErrorMessage(error, "Failed to load users' feedback")
+    );
+  }
+};
+
+export const getFeedbackStats = async () => {
+  try {
+    const response = await api.get("/feedback/admin/feedback-stats");
+    return response.data;
+  } catch (error) {
+    throw new Error(
+      extractErrorMessage(error, "Failed to load feedback stats")
+    );
+  }
+};
+
 // Admin API
 export const getSystemStats = async () => {
   try {
@@ -704,111 +792,134 @@ export const debugOrganizationDocuments = async () => {
     const response = await api.get("/documents/debug/organization");
     return response.data;
   } catch (error) {
-    console.error("Debug organization error:", error);
-    return null;
+    throw new Error(extractErrorMessage(error, "Failed to load debug info"));
   }
 };
 
-// Feedback API
-export const submitFeedback = async (feedbackData) => {
+// Vector reindex (embeddings)
+export const reindexDocuments = async () => {
   try {
-    const response = await api.post("/feedback/submit", feedbackData);
+    // Rebuilding embeddings can take time; allow up to 5 minutes
+    const response = await api.post("/documents/reindex", null, {
+      timeout: 300000,
+    });
     return response.data;
   } catch (error) {
-    console.error(
-      "Submit feedback error:",
-      error.response?.data?.detail || error.message
-    );
+    throw new Error(extractErrorMessage(error, "Failed to reindex documents"));
+  }
+};
+
+// Graph API
+export const getGraphHealth = async () => {
+  try {
+    const response = await api.get("/graph/health", { timeout: 10000 });
+    return response.data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to get graph health"));
+  }
+};
+
+export const reindexGraph = async () => {
+  try {
+    // Reindex can be heavy; allow up to 5 minutes
+    const response = await api.post("/graph/reindex", null, {
+      timeout: 300000,
+    });
+    return response.data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to reindex graph"));
+  }
+};
+
+// Background reindex API
+export const startGraphReindexBackground = async () => {
+  try {
+    const response = await api.post("/graph/reindex/background", null, {
+      timeout: 15000,
+    });
+    return response.data; // { job_id, state }
+  } catch (error) {
     throw new Error(
-      error.response?.data?.detail || "Failed to submit feedback"
+      extractErrorMessage(error, "Failed to start background reindex")
     );
   }
 };
 
-export const getMyFeedback = async () => {
+export const getGraphReindexStatus = async (jobId) => {
   try {
-    const response = await api.get("/feedback/my-feedback");
-    return response.data;
+    const response = await api.get(`/graph/reindex/status/${jobId}`, {
+      timeout: 15000,
+    });
+    return response.data; // { state, indexed, ... }
   } catch (error) {
-    console.error(
-      "Get my feedback error:",
-      error.response?.data?.detail || error.message
-    );
-    throw new Error(error.response?.data?.detail || "Failed to get feedback");
+    throw new Error(extractErrorMessage(error, "Failed to get reindex status"));
   }
 };
 
-export const getUsersFeedback = async () => {
+export const getGraphDocumentSummary = async (documentId) => {
   try {
-    const response = await api.get("/feedback/admin/users-feedback");
+    // Summary may run aggregations; allow more time than default
+    const response = await api.get(`/graph/document/${documentId}/summary`, {
+      timeout: 60000,
+    });
     return response.data;
   } catch (error) {
-    console.error(
-      "Get users feedback error:",
-      error.response?.data?.detail || error.message
-    );
-    throw new Error(
-      error.response?.data?.detail || "Failed to get users feedback"
-    );
+    throw new Error(extractErrorMessage(error, "Failed to get graph summary"));
   }
 };
 
-export const getFeedbackStats = async () => {
+// Graph visualization helpers
+export const searchGraphEntities = async (q, limit = 10) => {
   try {
-    const response = await api.get("/feedback/admin/feedback-stats");
-    return response.data;
+    // quick health check to avoid unnecessary timeouts
+    try {
+      const h = await api.get(`/graph/health`, { timeout: 5000 });
+      if (!h.data?.enabled || h.data?.status === "disabled") return [];
+    } catch {}
+    const response = await api.get(`/graph/search`, {
+      params: { q, limit },
+      timeout: 20000,
+    });
+    return response.data; // [{id,name,type}]
   } catch (error) {
-    console.error(
-      "Get feedback stats error:",
-      error.response?.data?.detail || error.message
-    );
-    throw new Error(
-      error.response?.data?.detail || "Failed to get feedback statistics"
-    );
+    throw new Error(extractErrorMessage(error, "Failed to search entities"));
   }
 };
 
-// Chat History API functions
-export const getUserSessions = async () => {
+export const expandGraph = async ({
+  entities = null,
+  chunkIds = null,
+  maxNeighbors = 10,
+}) => {
   try {
-    const response = await api.get("/chat-history/sessions");
-    return response.data;
+    try {
+      const h = await api.get(`/graph/health`, { timeout: 5000 });
+      if (!h.data?.enabled || h.data?.status === "disabled") {
+        return { nodes: [], edges: [] };
+      }
+    } catch {}
+    const payload = {};
+    if (entities && entities.length) payload.entities = entities;
+    if (chunkIds && chunkIds.length) payload.chunk_ids = chunkIds;
+    payload.max_neighbors = maxNeighbors;
+    const response = await api.post(`/graph/expand`, payload, {
+      timeout: 40000,
+    });
+    return response.data; // {nodes, edges}
   } catch (error) {
-    console.error(
-      "Get user sessions error:",
-      error.response?.data?.detail || error.message
-    );
-    throw new Error(
-      error.response?.data?.detail || "Failed to get user sessions"
-    );
+    throw new Error(extractErrorMessage(error, "Failed to expand graph"));
   }
 };
 
-export const getSessionHistory = async (sessionId) => {
+export const getGraphEgo = async ({ centers, depth = 1, limit = 50 }) => {
   try {
-    const response = await api.get(`/chat-history/sessions/${sessionId}`);
-    return response.data;
+    const response = await api.get(`/graph/ego`, {
+      params: { centers: centers.join(","), depth, limit },
+      timeout: 40000,
+    });
+    return response.data; // {nodes, edges}
   } catch (error) {
-    console.error(
-      "Get session history error:",
-      error.response?.data?.detail || error.message
-    );
-    throw new Error(
-      error.response?.data?.detail || "Failed to get session history"
-    );
-  }
-};
-
-export const deleteSession = async (sessionId) => {
-  try {
-    const response = await api.delete(`/chat-history/sessions/${sessionId}`);
-    return response.data;
-  } catch (error) {
-    console.error(
-      "Delete session error:",
-      error.response?.data?.detail || error.message
-    );
-    throw new Error(error.response?.data?.detail || "Failed to delete session");
+    throw new Error(extractErrorMessage(error, "Failed to load ego network"));
   }
 };
 

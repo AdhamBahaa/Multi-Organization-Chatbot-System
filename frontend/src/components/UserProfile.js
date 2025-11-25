@@ -69,6 +69,10 @@ const UserProfile = ({ userInfo }) => {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Debug logging
+  console.log("UserProfile - userInfo:", userInfo);
+  console.log("UserProfile - role:", userInfo?.role);
+
   const handleChangePassword = async (e) => {
     e.preventDefault();
 
@@ -150,11 +154,15 @@ const UserProfile = ({ userInfo }) => {
         </div>
         <div className="info-row">
           <label>Role:</label>
-          <span>User</span>
+          <span>{userInfo.role || "User"}</span>
         </div>
         <div className="info-row">
           <label>Organization ID:</label>
           <span>{userInfo.organization_id}</span>
+        </div>
+        <div className="info-row">
+          <label>Admin ID:</label>
+          <span>{userInfo.admin_id}</span>
         </div>
       </div>
 

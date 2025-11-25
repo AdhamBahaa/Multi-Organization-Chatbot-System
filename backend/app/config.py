@@ -69,6 +69,69 @@ DEV_MODE = "shared"  # Always shared mode for team collaboration
 # Upload Directory (shared development only)
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'shared_uploads')
 
+# Chunking/Vector configuration
+# Default to 'oddadmix' engine; keep 'docling' available
+# Options: 'oddadmix', 'docling', 'chroma'
+CHUNKING_ENGINE = os.getenv("CHUNKING_ENGINE", "oddadmix").lower()
+# When False, vector DB (Chroma) remains present but is not used
+USE_VECTOR_DB = os.getenv("USE_VECTOR_DB", "false").lower() in ("1", "true", "yes")
+
+# Docling behavior tuning
+# Prefer converting already-extracted text into Docling MD instead of re-parsing the PDF (much faster, avoids heavy model downloads)
+DOCLING_PREFER_TEXT = os.getenv("DOCLING_PREFER_TEXT", "true").lower() in ("1", "true", "yes")
+# Choose chunker: 'hierarchical' (fast, structure-aware) or 'hybrid' (token-aware, slower and may download extra models)
+DOCLING_CHUNKER_MODE = os.getenv("DOCLING_CHUNKER_MODE", "hierarchical").lower()
+
+# Oddadmix chunking parameters
+ODDADMIX_CHUNK_SIZE = int(os.getenv("ODDADMIX_CHUNK_SIZE", "1000"))
+ODDADMIX_CHUNK_OVERLAP = int(os.getenv("ODDADMIX_CHUNK_OVERLAP", "200"))
+
+# Graph Database configuration
+USE_GRAPH_DB = os.getenv("USE_GRAPH_DB", "false").lower() in ("1", "true", "yes")
+GRAPH_DB_URI = os.getenv("GRAPH_DB_URI", "bolt://localhost:7687")
+GRAPH_DB_USER = os.getenv("GRAPH_DB_USER", "neo4j")
+GRAPH_DB_PASSWORD = os.getenv("GRAPH_DB_PASSWORD", "password")
+
+# Performance tuning
+# Limit number of entities linked per chunk to keep graph sparse and reindex fast
+MAX_ENTITIES_PER_CHUNK = int(os.getenv("MAX_ENTITIES_PER_CHUNK", "10"))
+# Optional: size of batches for bulk operations (not strictly required, but kept for future use)
+GRAPH_BATCH_TX_SIZE = int(os.getenv("GRAPH_BATCH_TX_SIZE", "500"))
+"""
+Control co-occurrence edge creation. These edges can explode combinatorially per chunk.
+Disable or limit to keep reindex fast.
+"""
+ENABLE_ENTITY_COOCCURRENCE = os.getenv("ENABLE_ENTITY_COOCCURRENCE", "true").lower() in ("1", "true", "yes")
+MAX_COOCCURRENCE_PER_CHUNK = int(os.getenv("MAX_COOCCURRENCE_PER_CHUNK", "30"))
+
+# Typed relations (subject-predicate-object) extraction
+# Disabled by default. When enabled, simple rule-based relations like LIVES_IN, KNOWS, WORKS_AT, PART_OF, REPORTS_TO, AGE are detected.
+ENABLE_TYPED_RELATIONS = os.getenv("ENABLE_TYPED_RELATIONS", "false").lower() in ("1", "true", "yes")
+MAX_TYPED_RELATIONS_PER_CHUNK = int(os.getenv("MAX_TYPED_RELATIONS_PER_CHUNK", "20"))
+
+# Hybrid retrieval (score fusion of vector + keyword)
+ENABLE_HYBRID_RETRIEVAL = os.getenv("ENABLE_HYBRID_RETRIEVAL", "false").lower() in ("1", "true", "yes")
+# RRF parameter (larger K reduces the impact of rank position differences)
+HYBRID_RRF_K = int(os.getenv("HYBRID_RRF_K", "60"))
+# Limit how many chunks per document we include in the final prompt context
+HYBRID_MAX_CHUNKS_PER_DOC = int(os.getenv("HYBRID_MAX_CHUNKS_PER_DOC", "6"))
+
+# Debug and logging verbosity (0=silent, 1=compact, 2=verbose)
+DEBUG_VERBOSITY = int(os.getenv("DEBUG_VERBOSITY", "2"))
+
+# Readability: control chunk title generation and entity filtering
+CHUNK_TITLE_MAX_WORDS = int(os.getenv("CHUNK_TITLE_MAX_WORDS", "8"))
+# When false, numeric-only entities will be ignored for graph display and storage
+GRAPH_INCLUDE_NUMERIC_ENTITIES = os.getenv("GRAPH_INCLUDE_NUMERIC_ENTITIES", "false").lower() in ("1", "true", "yes")
+
+# Post-generation validation
+ENABLE_LC_VALIDATION = os.getenv("ENABLE_LC_VALIDATION", "true").lower() in ("1", "true", "yes")
+# Max allowed characters in final response (acts as a guardrail; 0 disables)
+VALIDATION_MAX_CHARS = int(os.getenv("VALIDATION_MAX_CHARS", "3000"))
+
+# Fact-check validation (evaluates answer strictly against provided context)
+ENABLE_FACT_CHECK_VALIDATION = os.getenv("ENABLE_FACT_CHECK_VALIDATION", "true").lower() in ("1", "true", "yes")
+
 # Demo Users (for development only)
 DEMO_USERS = {
     "admin": {"id": 1, "username": "admin", "password": "admin123", "role": "admin"},

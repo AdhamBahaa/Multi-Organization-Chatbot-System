@@ -20,14 +20,24 @@ const UserDashboard = ({ user, onLogout }) => {
 
   const loadUserInfo = async () => {
     try {
+      // Debug logging
+      console.log("UserDashboard - user object:", user);
+      console.log("UserDashboard - organization_role:", user.organization_role);
+      console.log("UserDashboard - system role:", user.role);
+
       // Use the actual user data from login response
-      setUserInfo({
+      const userInfoData = {
         id: user.id,
         email: user.email,
         full_name: user.full_name,
         role: user.organization_role || user.role, // Use organization role if available, fallback to system role
+        organization_id: user.organization_id, // Include organization ID
+        admin_id: user.admin_id, // Include admin ID
         createdAt: new Date().toLocaleDateString(),
-      });
+      };
+
+      console.log("UserDashboard - setting userInfo:", userInfoData);
+      setUserInfo(userInfoData);
     } catch (error) {
       console.error("Error loading user info:", error);
     }

@@ -36,7 +36,13 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 2))
 # print("TOKEN EXPIRY:", ACCESS_TOKEN_EXPIRE_MINUTES)
 
 # Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use bcrypt_sha256 to avoid the 72-byte limit of bcrypt on long passwords.
+# Keep bcrypt for backward compatibility with existing hashes.
+pwd_context = CryptContext(
+    schemes=["pbkdf2_sha256", "bcrypt_sha256", "bcrypt"],
+    default="pbkdf2_sha256",
+    deprecated="auto"
+)
 
 # JWT token bearer
 security = HTTPBearer()

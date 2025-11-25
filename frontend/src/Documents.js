@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { uploadDocument, getDocuments, deleteDocument } from "./api";
 import "./Documents.css";
 
@@ -11,11 +11,7 @@ function Documents({ user }) {
 
   const isAdmin = user && user.role === "admin";
 
-  useEffect(() => {
-    loadDocuments();
-  }, []);
-
-  const loadDocuments = async () => {
+  const loadDocuments = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -31,7 +27,11 @@ function Documents({ user }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isAdmin]);
+
+  useEffect(() => {
+    loadDocuments();
+  }, [loadDocuments]);
 
   const handleDrag = (e) => {
     e.preventDefault();

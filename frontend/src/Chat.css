@@ -399,6 +399,16 @@
   animation: typingBounce 1.4s ease-in-out infinite both;
 }
 
+/* Graph section under chat */
+.graph-under-chat {
+  margin: 16px 24px 24px 24px;
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  overflow: hidden;
+  min-height: 380px;
+}
+
 .typing-dots span:nth-child(1) {
   animation-delay: -0.32s;
 }

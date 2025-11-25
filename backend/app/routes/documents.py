@@ -9,6 +9,7 @@ from ..auth import get_current_user
 from ..documents import get_all_documents, get_documents_by_organization, upload_document, delete_document, get_organization_stats
 from ..models import DocumentResponse, SystemStatsResponse
 from ..document_store import document_store
+from ..config import USE_VECTOR_DB
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -166,3 +167,200 @@ async def debug_organization_documents(
             status_code=500,
             detail=f"Debug failed: {str(e)}"
         )
+
+
+@router.post("/reindex")
+async def reindex_documents(
+    current_user: Union[Admin, User] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """(Re)index all documents for the current user's organization into the vector DB.
+
+    - Deletes existing embeddings per document to avoid duplicates
+    - Adds fresh embeddings using the current configured chunking engine in vector_db
+      (Oddadmix by default via CHUNKING_ENGINE), with fallbacks to Docling then simple.
+    """
+    if not USE_VECTOR_DB:
+        raise HTTPException(status_code=400, detail="Vector DB is disabled by configuration")
+
+    try:
+        # Determine organization
+        organization_id = current_user.OrganizationID
+
+        # Collect documents for this org
+        org_docs = document_store.get_documents_by_organization(organization_id)
+        if not org_docs:
+            return {"message": "No documents to index", "indexed": 0, "skipped": 0}
+
+        from ..vector_db import vector_db
+        indexed = 0
+        skipped = 0
+        for doc in org_docs:
+            doc_id = doc.get("id")
+            text = doc.get("extracted_text") or ""
+            if not doc_id or not text:
+                skipped += 1
+                continue
+
+            # Remove previous embeddings for this doc
+            try:
+                vector_db.delete_document(doc_id)
+            except Exception:
+                pass
+
+            # Add fresh embeddings
+            metadata = {
+                "document_id": doc_id,
+                "filename": doc.get("filename", ""),
+                "file_type": doc.get("file_type", ""),
+                "file_size": doc.get("file_size", 0),
+                "uploaded_at": doc.get("uploaded_at", 0),
+                "organization_id": organization_id,
+            }
+            ok = vector_db.add_document(doc_id, text, metadata)
+            if ok:
+                indexed += 1
+            else:
+                skipped += 1
+
+        return {
+            "message": "Reindex completed",
+            "indexed": indexed,
+            "skipped": skipped,
+            "organization_id": organization_id,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Reindex failed: {str(e)}")
+
+
+@router.get("/{document_id}/chunks")
+async def get_document_chunks(
+    document_id: str,
+    engine: str = "oddadmix",
+    current_user: Union[Admin, User] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Return chunks for a given document using the selected chunking engine (default: docling)."""
+    try:
+        # Ensure document exists and belongs to user's organization
+        doc = document_store.get_document(document_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        user_org_id = current_user.OrganizationID
+        if doc.get("organization_id") != user_org_id:
+            raise HTTPException(status_code=403, detail="Access denied: Document belongs to different organization")
+
+        extracted_text = doc.get("extracted_text") or ""
+        if not extracted_text:
+            # Attempt to recover text from the stored file on disk after a restart
+            try:
+                import os
+                file_path = doc.get("file_path", "")
+                content_type = doc.get("file_type", "")
+                filename = doc.get("filename", "")
+                if file_path and os.path.exists(file_path):
+                    with open(file_path, "rb") as f:
+                        content = f.read()
+                    from ..utils import extract_text_from_file
+                    recovered = extract_text_from_file(content, content_type, filename) or ""
+                    # If extractor returned a descriptive placeholder, treat as empty
+                    if recovered and not recovered.lower().startswith(("file uploaded", "pdf file uploaded", "word document uploaded")):
+                        extracted_text = recovered
+                        # Persist the recovered text back into the registry
+                        try:
+                            doc["extracted_text"] = extracted_text
+                            document_store.add_document(document_id, doc)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+        if not extracted_text:
+            return {"document_id": document_id, "engine": engine, "chunks": [], "chunk_count": 0}
+
+        # Choose engine
+        chunks = []
+        used_engine = engine
+        debug_info = {}
+        fallback_info = {}
+        processed = False
+        if engine == "oddadmix":
+            try:
+                from ..oddadmix_chunker import chunk_text_with_oddadmix, oddadmix_available
+                avail = oddadmix_available()
+                print(f"[chunks-route] Oddadmix available: {avail}")
+                if avail:
+                    from ..config import ODDADMIX_CHUNK_SIZE, ODDADMIX_CHUNK_OVERLAP
+                    chunks, used_engine, debug_info = chunk_text_with_oddadmix(extracted_text, ODDADMIX_CHUNK_SIZE, ODDADMIX_CHUNK_OVERLAP)
+                    processed = True
+                else:
+                    raise RuntimeError("Oddadmix not available; choose docling or simple")
+            except Exception as e:
+                print(f"[chunks-route] Oddadmix failed, trying Docling. Error: {e}")
+                fallback_info = {
+                    "fallback_from": "oddadmix",
+                    "oddadmix_error": str(e),
+                }
+                engine = "docling"
+
+        # If Oddadmix did not fully process, try Docling or Simple
+        if not processed:
+            if engine in ("docling", "docling-hybrid", "docling-hierarchical"):
+                try:
+                    from ..docling_chunker import (
+                        chunk_text_with_docling_with_debug_info,
+                        chunk_text_with_docling_debug,
+                        simple_sentence_chunk,
+                    )
+                    # Pass both pdf_path and text to the docling chunker (correct signature)
+                    pdf_path = doc.get("file_path", "")
+                    # Pass prefer_hybrid override when engine=docling-hybrid or docling-hierarchical
+                    prefer_hybrid = True if engine == "docling-hybrid" else (False if engine == "docling-hierarchical" else None)
+                    docling_chunks, docling_used_engine, docling_debug = chunk_text_with_docling_with_debug_info(
+                        pdf_path=pdf_path, text=extracted_text, max_chunk_size=1000, prefer_hybrid=prefer_hybrid
+                    )
+                    # apply results
+                    chunks = docling_chunks
+                    used_engine = docling_used_engine
+                    # merge any prior fallback info with docling debug
+                    if isinstance(docling_debug, dict):
+                        debug_info = {**docling_debug, **fallback_info}
+                    else:
+                        debug_info = {"docling_debug": docling_debug, **fallback_info}
+                    processed = True
+                except Exception as e:
+                    # Route-level log to help diagnose silent fallback
+                    print(f"[chunks-route] Docling failed, falling back to simple. Error: {e}")
+                    from ..docling_chunker import simple_sentence_chunk
+                    chunks = simple_sentence_chunk(extracted_text, max_chunk_size=1000)
+                    used_engine = "simple"
+                    debug_info = {"error": str(e), **fallback_info}
+                    processed = True
+            else:
+                from ..docling_chunker import simple_sentence_chunk
+                chunks = simple_sentence_chunk(extracted_text, max_chunk_size=1000)
+                used_engine = "simple"
+                if not debug_info:
+                    debug_info = {"note": "simple engine selected", **fallback_info}
+                processed = True
+
+        resp = {
+            "document_id": document_id,
+            "engine": engine,
+            "used_engine": used_engine,
+            "chunk_count": len(chunks),
+            "chunks": chunks,
+            "filename": doc.get("filename"),
+            "debug": debug_info,
+        }
+        # Route-level log for visibility
+        if resp.get("debug") and isinstance(resp["debug"], dict) and resp["debug"].get("oddadmix_error"):
+            print(f"[chunks-route] Oddadmix error detail: {resp['debug']['oddadmix_error']}")
+        print(f"[chunks-route] document_id={document_id} requested_engine={engine} used_engine={used_engine} chunks={len(chunks)}")
+        return resp
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get chunks: {str(e)}")

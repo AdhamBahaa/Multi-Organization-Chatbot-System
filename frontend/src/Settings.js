@@ -4,6 +4,11 @@ import {
   getUsers,
   getOrganizationStats,
   debugOrganizationDocuments,
+  getDocumentChunks,
+  getGraphHealth,
+  startGraphReindexBackground,
+  getGraphReindexStatus,
+  getGraphDocumentSummary,
 } from "./api";
 
 function Settings() {
@@ -20,9 +25,30 @@ function Settings() {
   const [error, setError] = useState(null);
   const [debugInfo, setDebugInfo] = useState(null);
   const [debugLoading, setDebugLoading] = useState(false);
+  const [openChunks, setOpenChunks] = useState({});
+  // chunksCache shape: { [docId]: { [engine]: { chunks, chunk_count, ... } } }
+  const [chunksCache, setChunksCache] = useState({});
+  const [chunksLoading, setChunksLoading] = useState({});
+  const [engineChoice, setEngineChoice] = useState({});
+  const [graphHealth, setGraphHealth] = useState(null);
+  const [graphLoading, setGraphLoading] = useState(false);
+  const [graphActionMsg, setGraphActionMsg] = useState("");
+  const [docSummaries, setDocSummaries] = useState({});
+  const [vecLoading, setVecLoading] = useState(false);
+  const [vecActionMsg, setVecActionMsg] = useState("");
+  const [debugOpen, setDebugOpen] = useState({});
 
   useEffect(() => {
     loadSystemData();
+    // Load graph health in parallel
+    (async () => {
+      try {
+        const h = await getGraphHealth();
+        setGraphHealth(h);
+      } catch (e) {
+        setGraphHealth({ enabled: false, status: "error", error: e.message });
+      }
+    })();
   }, []);
 
   const loadSystemData = async () => {
@@ -35,6 +61,7 @@ function Settings() {
         setStats((prevStats) => ({
           ...prevStats,
           total_documents: orgStats.total_documents || 0,
+          total_chunks: orgStats.total_chunks ?? prevStats.total_chunks ?? 0,
           organization_id: orgStats.organization_id || null,
           documents: orgStats.documents || [],
         }));
@@ -76,18 +103,155 @@ function Settings() {
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "connected":
-      case "healthy":
-        return { bg: "#dcfce7", color: "#166534" };
-      case "error":
-      case "disconnected":
-        return { bg: "#fef2f2", color: "#dc2626" };
-      default:
-        return { bg: "#fef3c7", color: "#92400e" };
+  const toggleChunks = async (docId) => {
+    setOpenChunks((prev) => ({ ...prev, [docId]: !prev[docId] }));
+    const willOpen = !openChunks[docId];
+    const engine = engineChoice[docId] || "oddadmix";
+    if (willOpen && !(chunksCache[docId] && chunksCache[docId][engine])) {
+      setChunksLoading((p) => ({ ...p, [docId]: true }));
+      try {
+        const data = await getDocumentChunks(docId, engine);
+        try {
+          console.log("[chunks-ui] fetched", {
+            docId,
+            engine,
+            used_engine: data?.used_engine,
+            debug: data?.debug,
+          });
+        } catch {}
+        setChunksCache((p) => ({
+          ...p,
+          [docId]: { ...(p[docId] || {}), [engine]: data },
+        }));
+      } catch (e) {
+        setChunksCache((p) => ({
+          ...p,
+          [docId]: { ...(p[docId] || {}), [engine]: { error: e.message } },
+        }));
+      } finally {
+        setChunksLoading((p) => ({ ...p, [docId]: false }));
+      }
     }
   };
+
+  const changeEngine = async (docId, newEngine) => {
+    setEngineChoice((p) => ({ ...p, [docId]: newEngine }));
+    // If the panel is open and we don't have cache for the new engine, fetch it
+    if (
+      openChunks[docId] &&
+      !(chunksCache[docId] && chunksCache[docId][newEngine])
+    ) {
+      setChunksLoading((p) => ({ ...p, [docId]: true }));
+      try {
+        const data = await getDocumentChunks(docId, newEngine);
+        try {
+          console.log("[chunks-ui] fetched", {
+            docId,
+            engine: newEngine,
+            used_engine: data?.used_engine,
+            debug: data?.debug,
+          });
+        } catch {}
+        setChunksCache((p) => ({
+          ...p,
+          [docId]: { ...(p[docId] || {}), [newEngine]: data },
+        }));
+      } catch (e) {
+        setChunksCache((p) => ({
+          ...p,
+          [docId]: { ...(p[docId] || {}), [newEngine]: { error: e.message } },
+        }));
+      } finally {
+        setChunksLoading((p) => ({ ...p, [docId]: false }));
+      }
+    }
+  };
+
+  const triggerGraphReindex = async () => {
+    setGraphLoading(true);
+    setGraphActionMsg("");
+    try {
+      // Prefer background job to avoid UI blocking
+  const start = await startGraphReindexBackground();
+      setGraphActionMsg(`Reindex started (job: ${start.job_id}).`);
+
+      // Poll status until done/error
+      const poll = async () => {
+        try {
+          const s = await getGraphReindexStatus(start.job_id);
+          if (s.state === "done") {
+            setGraphActionMsg(
+              `Reindex completed: indexed ${s.indexed ?? 0} document(s).`
+            );
+          } else if (s.state === "error") {
+            setGraphActionMsg(`Reindex failed: ${s.error || "Unknown error"}`);
+          } else {
+            setGraphActionMsg(
+              `Reindex ${s.state}... ${s.indexed ?? 0} document(s) processed`
+            );
+            setTimeout(poll, 2000);
+          }
+        } catch (e) {
+          setGraphActionMsg(`Status error: ${e.message}`);
+        }
+      };
+      setTimeout(poll, 1500);
+    } catch (e) {
+      setGraphActionMsg(`Reindex failed: ${e.message}`);
+    } finally {
+      setGraphLoading(false);
+    }
+  };
+
+  const triggerVectorReindex = async () => {
+    setVecLoading(true);
+    setVecActionMsg("");
+    try {
+      const { reindexDocuments } = await import("./api");
+      const res = await reindexDocuments();
+      setVecActionMsg(
+        `Vector reindex completed: indexed ${res.indexed ?? 0}, skipped ${
+          res.skipped ?? 0
+        }.`
+      );
+      // Refresh stats to reflect updated chunk totals if any were recomputed
+      await loadSystemData();
+    } catch (e) {
+      setVecActionMsg(`Vector reindex failed: ${e.message}`);
+    } finally {
+      setVecLoading(false);
+    }
+  };
+
+  const loadDocSummary = async (docId) => {
+    setDocSummaries((p) => ({ ...p, [docId]: { loading: true } }));
+    try {
+      const s = await getGraphDocumentSummary(docId);
+      setDocSummaries((p) => ({ ...p, [docId]: { ...s, loading: false } }));
+    } catch (e) {
+      setDocSummaries((p) => ({
+        ...p,
+        [docId]: { error: e.message, loading: false },
+      }));
+    }
+  };
+
+  // Note: getStatusColor is unused here; if needed for future UI, reintroduce.
+
+  const pill = (text, color) => (
+    <span
+      style={{
+        background: color || "#f1f5f9",
+        color: "#0f172a",
+        padding: "2px 8px",
+        borderRadius: 999,
+        fontSize: 12,
+        marginLeft: 6,
+      }}
+    >
+      {text}
+    </span>
+  );
 
   if (loading) {
     return (
@@ -119,81 +283,81 @@ function Settings() {
         </div>
       )}
 
-      {/* System Status */}
-      <div style={{ marginBottom: "30px" }}>
-        <h3>System Status</h3>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "15px",
-            marginTop: "15px",
-          }}
-        >
-          <div
+      {/* Graph DB Status */}
+      <div style={{ marginBottom: 20 }}>
+        <h3>Graph Database</h3>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ fontSize: 12, color: "#334155" }}>Status:</div>
+          {graphHealth ? (
+            <>
+              {pill(
+                graphHealth.status || (graphHealth.enabled ? "ok" : "disabled"),
+                graphHealth.status === "ok"
+                  ? "#dcfce7"
+                  : graphHealth.status === "error"
+                  ? "#fee2e2"
+                  : "#fde68a"
+              )}
+              {graphHealth.error && (
+                <span style={{ fontSize: 12, color: "#b91c1c" }}>
+                  {graphHealth.error}
+                </span>
+              )}
+            </>
+          ) : (
+            <span style={{ fontSize: 12, color: "#64748b" }}>Loading...</span>
+          )}
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <button
+            onClick={triggerGraphReindex}
+            disabled={graphLoading}
             style={{
-              padding: "15px",
-              backgroundColor: "#f9fafb",
-              borderRadius: "8px",
+              padding: "6px 10px",
+              backgroundColor: graphLoading ? "#93c5fd" : "#3b82f6",
+              color: "white",
+              border: "none",
+              borderRadius: 4,
+              cursor: graphLoading ? "default" : "pointer",
+              fontSize: 12,
             }}
           >
-            <h4 style={{ margin: "0 0 10px 0", color: "#374151" }}>
-              AI Service
-            </h4>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <div
-                style={{
-                  ...getStatusColor(stats.ai_configured ? "healthy" : "error"),
-                  padding: "4px 8px",
-                  borderRadius: "4px",
-                  fontSize: "12px",
-                }}
-              >
-                {stats.ai_configured ? "✅ Configured" : "❌ Not Configured"}
-              </div>
+            {graphLoading ? "Reindexing..." : "Reindex Graph (Org)"}
+          </button>
+          {graphActionMsg && (
+            <div style={{ fontSize: 12, color: "#334155", marginTop: 6 }}>
+              {graphActionMsg}
             </div>
-            <div
-              style={{ fontSize: "12px", color: "#6b7280", marginTop: "5px" }}
-            >
-              Google Gemini API:{" "}
-              {stats.ai_configured ? "Active" : "Missing API Key"}
-            </div>
-          </div>
-
-          <div
-            style={{
-              padding: "15px",
-              backgroundColor: "#f9fafb",
-              borderRadius: "8px",
-            }}
-          >
-            <h4 style={{ margin: "0 0 10px 0", color: "#374151" }}>
-              Vector Database
-            </h4>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <div
-                style={{
-                  ...getStatusColor(stats.vector_db_status),
-                  padding: "4px 8px",
-                  borderRadius: "4px",
-                  fontSize: "12px",
-                }}
-              >
-                {stats.vector_db_status || "Unknown"}
-              </div>
-            </div>
-            <div
-              style={{ fontSize: "12px", color: "#6b7280", marginTop: "5px" }}
-            >
-              ChromaDB Local Instance
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
       {/* Document Statistics */}
       <div style={{ marginBottom: "30px" }}>
         <h3>Document Statistics</h3>
+        <div style={{ marginBottom: 10 }}>
+          <button
+            onClick={triggerVectorReindex}
+            disabled={vecLoading}
+            style={{
+              padding: "6px 10px",
+              backgroundColor: vecLoading ? "#93c5fd" : "#1d4ed8",
+              color: "white",
+              border: "none",
+              borderRadius: 4,
+              cursor: vecLoading ? "default" : "pointer",
+              fontSize: 12,
+              marginRight: 10,
+            }}
+          >
+            {vecLoading ? "Reindexing..." : "Reindex Vectors (Org)"}
+          </button>
+          {vecActionMsg && (
+            <span style={{ fontSize: 12, color: "#334155", marginLeft: 8 }}>
+              {vecActionMsg}
+            </span>
+          )}
+        </div>
         <div
           style={{
             display: "grid",
@@ -284,14 +448,216 @@ function Settings() {
                 >
                   {doc.filename}
                 </div>
-                <div style={{ fontSize: "12px", color: "#6b7280" }}>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>
                   ID: {doc.id} • Organization: {doc.organization_id}
                 </div>
-                <div style={{ fontSize: "12px", color: "#6b7280" }}>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>
                   Text:{" "}
-                  {doc.has_extracted_text ? "✅ Extracted" : "❌ Not extracted"}
+                  {doc.has_extracted_text ? "✅ Extracted" : "❌ Not extracted"}{" "}
                   • Length: {doc.text_length} chars • Chunks: {doc.chunk_count}
                 </div>
+
+                {/* Graph summary */}
+                <div style={{ marginTop: 6 }}>
+                  <button
+                    onClick={() => loadDocSummary(doc.id)}
+                    style={{
+                      padding: "4px 8px",
+                      backgroundColor: "#10b981",
+                      color: "white",
+                      border: "none",
+                      borderRadius: 4,
+                      cursor: "pointer",
+                      fontSize: 12,
+                      marginRight: 8,
+                    }}
+                  >
+                    Graph Summary
+                  </button>
+                  {docSummaries[doc.id]?.loading && (
+                    <span style={{ fontSize: 12, color: "#64748b" }}>
+                      Loading...
+                    </span>
+                  )}
+                  {docSummaries[doc.id]?.error && (
+                    <span style={{ fontSize: 12, color: "#b91c1c" }}>
+                      {docSummaries[doc.id].error}
+                    </span>
+                  )}
+                  {docSummaries[doc.id] &&
+                    !docSummaries[doc.id].loading &&
+                    !docSummaries[doc.id].error && (
+                      <span style={{ fontSize: 12, color: "#334155" }}>
+                        Chunks: {docSummaries[doc.id].chunks} • Entities:{" "}
+                        {docSummaries[doc.id].entities}
+                      </span>
+                    )}
+                </div>
+
+                {doc.has_extracted_text && (
+                  <div style={{ marginTop: "8px" }}>
+                    <button
+                      onClick={() => toggleChunks(doc.id)}
+                      style={{
+                        padding: "6px 10px",
+                        backgroundColor: "#2563eb",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                      }}
+                    >
+                      {openChunks[doc.id]
+                        ? "Hide chunks"
+                        : `View chunks (${engineChoice[doc.id] || "oddadmix"})`}
+                    </button>
+                    <span
+                      style={{
+                        marginLeft: "10px",
+                        fontSize: "12px",
+                        color: "#475569",
+                      }}
+                    >
+                      Engine:{" "}
+                    </span>
+                    <select
+                      value={engineChoice[doc.id] || "oddadmix"}
+                      onChange={(e) => changeEngine(doc.id, e.target.value)}
+                      style={{
+                        padding: "4px 6px",
+                        fontSize: "12px",
+                        borderRadius: "4px",
+                        border: "1px solid #cbd5e1",
+                        marginLeft: "6px",
+                      }}
+                    >
+                      <option value="oddadmix">Oddadmix</option>
+                      <option value="docling">Docling</option>
+                      <option value="docling-hierarchical">
+                        Docling Hierarchical
+                      </option>
+                      <option value="simple">Simple</option>
+                    </select>
+                  </div>
+                )}
+
+                {openChunks[doc.id] && (
+                  <div
+                    style={{
+                      marginTop: "10px",
+                      backgroundColor: "#f8fafc",
+                      padding: "10px",
+                      borderRadius: "6px",
+                      border: "1px solid #e2e8f0",
+                    }}
+                  >
+                    {chunksLoading[doc.id] ? (
+                      <div style={{ fontSize: "12px", color: "#64748b" }}>
+                        Loading chunks...
+                      </div>
+                    ) : (
+                      <div>
+                        {(() => {
+                          const engine = engineChoice[doc.id] || "oddadmix";
+                          const data = chunksCache[doc.id]?.[engine];
+                          if (!data) return null;
+                          if (data.error)
+                            return (
+                              <div style={{ fontSize: 12, color: "#b91c1c" }}>
+                                {data.error}
+                              </div>
+                            );
+                          return (
+                            <div>
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  color: "#334155",
+                                  marginBottom: 6,
+                                }}
+                              >
+                                Used Engine:{" "}
+                                {data.used_engine || data.engine || engine} •
+                                Chunks: {data.chunk_count}
+                                {data.used_engine &&
+                                  data.used_engine !== engine && (
+                                    <span
+                                      style={{
+                                        marginLeft: 8,
+                                        color: "#b45309",
+                                      }}
+                                    >
+                                      (fallback from {engine})
+                                    </span>
+                                  )}
+                                <button
+                                  onClick={() =>
+                                    setDebugOpen((p) => ({
+                                      ...p,
+                                      [doc.id]: !p[doc.id],
+                                    }))
+                                  }
+                                  style={{
+                                    marginLeft: 10,
+                                    padding: "2px 6px",
+                                    fontSize: 11,
+                                    borderRadius: 4,
+                                    border: "1px solid #94a3b8",
+                                    background: debugOpen[doc.id]
+                                      ? "#e2e8f0"
+                                      : "#f8fafc",
+                                    color: "#334155",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  {debugOpen[doc.id]
+                                    ? "Hide debug"
+                                    : "Show debug"}
+                                </button>
+                              </div>
+                              {debugOpen[doc.id] && (
+                                <pre
+                                  style={{
+                                    background: "#f1f5f9",
+                                    color: "#0f172a",
+                                    fontSize: 11,
+                                    padding: 8,
+                                    borderRadius: 4,
+                                    maxHeight: 200,
+                                    overflowY: "auto",
+                                    border: "1px solid #e2e8f0",
+                                    marginBottom: 8,
+                                  }}
+                                >
+                                  {data?.debug
+                                    ? JSON.stringify(data.debug, null, 2)
+                                    : "No debug info"}
+                                </pre>
+                              )}
+                              <div
+                                style={{
+                                  maxHeight: 220,
+                                  overflowY: "auto",
+                                  fontSize: 12,
+                                  color: "#0f172a",
+                                }}
+                              >
+                                <ol style={{ margin: 0, paddingLeft: 18 }}>
+                                  {data.chunks?.map((c, i) => (
+                                    <li key={i} style={{ marginBottom: 6 }}>
+                                      {c}
+                                    </li>
+                                  ))}
+                                </ol>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

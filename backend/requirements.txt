@@ -15,15 +15,34 @@ passlib[bcrypt]==1.7.4
 google-generativeai==0.3.2
 chromadb==0.4.18
 sentence-transformers==5.1.0
+numpy<2.0
+
+# LangChain (validation layer)
+langchain==0.2.16
+langchain-google-genai==1.0.7
+
+# Graph database
+neo4j==5.26.0
 
 # Document processing
 pypdf2==3.0.1
-python-docx==0.8.11
+python-docx==1.1.2
 pandas==2.1.4
 
+# Optional: Oddadmix LLM Arabic Instruct Gen (provides TextChunker)
+# Heavy dependency; install only if you plan to use the oddadmix engine
+git+https://github.com/Oddadmix/llm-arabic-instruct-gen.git
+
 # Data validation
-pydantic==2.5.0
+pydantic==2.11.9
 email-validator==2.1.0
 
 # File handling
 aiofiles==23.2.0
+
+# Keep Docling and its Typer dependency compatible
+typer==0.16.1
+docling==2.54.0
+
+# Ensure compatibility with google-ai-generativelanguage
+protobuf==4.25.3

@@ -1,7 +1,9 @@
 """
 Main FastAPI application for the RAG Chatbot Backend
 """
+import os
 import uvicorn
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import CORS_ORIGINS, API_KEY, API_HOST, API_PORT, DEV_MODE
@@ -26,6 +28,33 @@ app.include_router(router, prefix="/api")
 # Configure Gemini API and initialize databases on startup
 @app.on_event("startup")
 async def startup_event():
+    # Quiet 3rd-party noisy logs and libraries
+    os.environ.setdefault("GRPC_VERBOSITY", "ERROR")
+    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")  # 2=warning, 3=error
+    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+    # Chroma telemetry is already disabled in vector_db, also lower related loggers
+    for name in [
+        "chromadb",
+        "chromadb.telemetry",
+        "posthog",
+        "absl",
+        "grpc",
+    ]:
+        logging.getLogger(name).setLevel(logging.ERROR)
+
+    # Reduce noisy logs to keep terminal readable
+    for name in [
+        "sqlalchemy.engine",
+        "uvicorn.error",
+        "uvicorn.access",
+        "httpcore",
+        "httpx",
+        "neo4j",
+        "sentence_transformers",
+        "transformers",
+        "tensorflow",
+    ]:
+        logging.getLogger(name).setLevel(logging.WARNING)
     # Check database connectivity (tables already exist)
     try:
         from app.database import engine
@@ -58,6 +87,24 @@ async def startup_event():
         print("🧹 Cleanup: ✅ Completed")
     except Exception as e:
         print(f"🧹 Cleanup: ❌ Error - {e}")
+
+    # Graph DB health
+    try:
+        from app.config import USE_GRAPH_DB
+        if USE_GRAPH_DB:
+            from app.graph_db import graph_client
+            # Ensure schema/constraints and then check health
+            try:
+                if hasattr(graph_client, "ensure_schema"):
+                    graph_client.ensure_schema()
+            except Exception as se:
+                print(f"🕸️  Graph DB: schema setup warning - {se}")
+            status = graph_client.health()
+            print(f"🕸️  Graph DB: {status}")
+        else:
+            print("🕸️  Graph DB: disabled")
+    except Exception as e:
+        print(f"🕸️  Graph DB: ❌ Error - {e}")
 
 if __name__ == "__main__":
     print("🚀 Starting RAG Chatbot Backend Server...")

@@ -80,10 +80,23 @@ async def set_password(
             )
         
         # Set password for admin and mark as activated
-        admin.PasswordHash = AuthManager.get_password_hash(password_data.password)
+        try:
+            admin.PasswordHash = AuthManager.get_password_hash(password_data.password)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to hash password: {str(e)}"
+            )
+
         admin.isActivated = 1  # Use integer 1 for True
-        db.commit()
-        db.refresh(admin)  # Refresh the object to get updated values
+        try:
+            db.commit()
+            db.refresh(admin)  # Refresh the object to get updated values
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to save password to database"
+            )
         
 
         
@@ -109,10 +122,23 @@ async def set_password(
             )
         
         # Set password for user and mark as activated
-        user.PasswordHash = AuthManager.get_password_hash(password_data.password)
+        try:
+            user.PasswordHash = AuthManager.get_password_hash(password_data.password)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to hash password: {str(e)}"
+            )
+
         user.isActivated = 1  # Use integer 1 for True
-        db.commit()
-        db.refresh(user)  # Refresh the object to get updated values
+        try:
+            db.commit()
+            db.refresh(user)  # Refresh the object to get updated values
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to save password to database"
+            )
         
         # Send welcome email to user
         try:

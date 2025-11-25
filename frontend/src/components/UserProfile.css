@@ -325,3 +325,43 @@
     flex-direction: column;
   }
 }
+
+/* Info Row Styles */
+.info-row {
+  display: flex;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.info-row label {
+  font-weight: 600;
+  color: #374151;
+  min-width: 120px;
+  margin-right: 16px;
+}
+
+.info-row span {
+  color: #6b7280;
+  flex: 1;
+}
+
+/* Debug Information Styles */
+.debug-info {
+  background-color: #f3f4f6;
+  padding: 10px;
+  border-radius: 6px;
+  margin-top: 15px;
+}
+
+.debug-info span {
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 12px;
+  color: #666;
+}
