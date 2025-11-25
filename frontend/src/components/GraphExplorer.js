@@ -1,21 +1,36 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import cytoscape from "cytoscape";
 import dagre from "cytoscape-dagre";
+import cola from "cytoscape-cola";
 import "./GraphExplorer.css";
 
 // Register dagre layout for fast, readable graph
 cytoscape.use(dagre);
-const defaultLayout = {
+cytoscape.use(cola);
+
+const dagreLayout = {
   name: "dagre",
-  // Left-to-right layout; change to TB for top-to-bottom
-  rankDir: "LR",
-  nodeSep: 40,
-  edgeSep: 20,
-  rankSep: 60,
   fit: true,
-  padding: 30,
+  padding: 40,
   animate: false,
+  rankDir: "LR",
+  nodeSep: 70,
+  edgeSep: 50,
+  rankSep: 120,
 };
+
+const colaLayout = {
+  name: "cola",
+  animate: false,
+  fit: true,
+  padding: 40,
+  avoidOverlap: true,
+  nodeSpacing: 60,
+  edgeLength: 220,
+  maxSimulationTime: 1200,
+};
+
+const getLayout = (name) => (name === "cola" ? colaLayout : dagreLayout);
 
 const cyStyles = [
   {
@@ -33,11 +48,16 @@ const cyStyles = [
           : ele.data("type") === "context"
           ? "#1c7ed6"
           : "#888",
+      width: 100,
+      height: 40,
+      shape: "round-rectangle",
       label: "data(label)",
       color: "#222",
       "font-size": 10,
       "text-wrap": "wrap",
-      "text-max-width": 120,
+      "text-max-width": 140,
+      "text-halign": "center",
+      "text-valign": "center",
       "border-width": 1,
       "border-color": "#ddd",
     },
@@ -81,9 +101,11 @@ export default function GraphExplorer({
   const containerRef = useRef(null);
   const cyRef = useRef(null);
   const countsRef = useRef({ nodes: 0, edges: 0 });
+  const layoutTimerRef = useRef(null);
   const memoElements = useMemo(() => toElements(graph), [graph]);
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
+  const [layoutName, setLayoutName] = useState("dagre"); // default fast layout
 
   // Initialize Cytoscape on mount
   useEffect(() => {
@@ -92,12 +114,14 @@ export default function GraphExplorer({
       container: containerRef.current,
       elements: [],
       style: cyStyles,
-      layout: defaultLayout,
+      layout: getLayout(layoutName),
       // perf tuning
       pixelRatio: 1,
       wheelSensitivity: 0.2,
       textureOnViewport: true,
       motionBlur: false,
+      hideEdgesOnViewport: true,
+      autoungrabify: true,
     });
     cy.on("select unselect", "node", () => {
       const ids = cy.$("node:selected").map((n) => n.data("id"));
@@ -123,12 +147,17 @@ export default function GraphExplorer({
 
     cy.startBatch();
     // Remove missing nodes/edges
-    cy.nodes()
-      .filter((n) => !newNodeIds.has(n.id()))
-      .remove();
-    cy.edges()
-      .filter((e) => !newEdgeIds.has(e.id()))
-      .remove();
+    const removedNodes = cy
+      .nodes()
+      .filter((n) => !newNodeIds.has(n.id()));
+    const removedEdges = cy
+      .edges()
+      .filter((e) => !newEdgeIds.has(e.id()));
+    const removedCount = removedNodes.length + removedEdges.length;
+    if (removedCount) {
+      removedEdges.remove();
+      removedNodes.remove();
+    }
     // Add new nodes
     const toAdd = [];
     for (const n of nodes) {
@@ -140,19 +169,55 @@ export default function GraphExplorer({
     if (toAdd.length) cy.add(toAdd);
     cy.endBatch();
 
-    // Run layout only when graph grows (prevents excessive relayouts)
+    // Decide whether to re-layout; debounce to avoid frequent runs
     const prev = countsRef.current;
-    const grew = nodes.length > prev.nodes || edges.length > prev.edges;
     countsRef.current = { nodes: nodes.length, edges: edges.length };
-    if (grew) {
-      cy.layout(defaultLayout).run();
+    const changed = toAdd.length > 0 || removedCount > 0 ||
+      prev.nodes !== nodes.length || prev.edges !== edges.length;
+
+    if (layoutTimerRef.current) {
+      clearTimeout(layoutTimerRef.current);
+      layoutTimerRef.current = null;
     }
-  }, [memoElements]);
+    if (changed) {
+      layoutTimerRef.current = setTimeout(() => {
+        const cy2 = cyRef.current;
+        if (!cy2) return;
+        const layoutCfg = getLayout(layoutName);
+        // Auto-switch to dagre for very large graphs
+        const total = cy2.nodes().length + cy2.edges().length;
+        const finalCfg = total > 200 ? dagreLayout : layoutCfg;
+        cy2.layout(finalCfg).run();
+      }, 150);
+    }
+  }, [memoElements, layoutName]);
+
+  // Re-run layout when layout type changes
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    if (layoutTimerRef.current) {
+      clearTimeout(layoutTimerRef.current);
+      layoutTimerRef.current = null;
+    }
+    layoutTimerRef.current = setTimeout(() => {
+      const cfg = getLayout(layoutName);
+      cy.layout(cfg).run();
+    }, 100);
+  }, [layoutName]);
 
   return (
     <div className="graph-explorer">
       <div className="toolbar">
         <strong style={{ marginRight: 8 }}>{title}</strong>
+        <select
+          value={layoutName}
+          onChange={(e) => setLayoutName(e.target.value)}
+          title="Choose layout"
+        >
+          <option value="dagre">Dagre (fast)</option>
+          <option value="cola">Cola (spread)</option>
+        </select>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -174,6 +239,17 @@ export default function GraphExplorer({
           title="Fit graph to view"
         >
           Fit
+        </button>
+        <button
+          onClick={() => {
+            const cy = cyRef.current;
+            if (cy) {
+              cy.layout(getLayout(layoutName)).run();
+            }
+          }}
+          title="Run layout again"
+        >
+          Relayout
         </button>
         <button
           onClick={() => onExpandEntities && onExpandEntities(selectedIds)}

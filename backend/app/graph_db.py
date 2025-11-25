@@ -311,8 +311,9 @@ try:
                 cypher = (
                     "UNWIND $entities as q "
                     "MATCH (e:Entity) WHERE e.id = q OR e.name = q "
+                    "WITH e LIMIT 10 "
                     "OPTIONAL MATCH (e)-[r:RELATED_TO]->(e2:Entity) "
-                    "WITH e, r, e2 LIMIT $k "
+                    "WITH e, r, e2 ORDER BY e2.name LIMIT $k "
                     "RETURN e as e, r as r, e2 as e2"
                 )
                 with self.driver.session() as session:
@@ -323,8 +324,11 @@ try:
                 cypher = (
                     "UNWIND $cids as cid "
                     "MATCH (c:Chunk {id: cid}) "
+                    "WITH c LIMIT 20 "
                     "OPTIONAL MATCH (c)-[:MENTIONS]->(e:Entity) "
+                    "WITH c, e LIMIT $k "
                     "OPTIONAL MATCH (e)-[r:RELATED_TO]->(e2:Entity) "
+                    "WITH c, e, r, e2 LIMIT $k "
                     "OPTIONAL MATCH (d:Document)-[:HAS_CHUNK]->(c) "
                     "RETURN c as c, e as e, r as r, e2 as e2, d as d"
                 )

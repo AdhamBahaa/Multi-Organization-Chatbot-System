@@ -871,6 +871,11 @@ export const getGraphDocumentSummary = async (documentId) => {
 // Graph visualization helpers
 export const searchGraphEntities = async (q, limit = 10) => {
   try {
+    // quick health check to avoid unnecessary timeouts
+    try {
+      const h = await api.get(`/graph/health`, { timeout: 5000 });
+      if (!h.data?.enabled || h.data?.status === "disabled") return [];
+    } catch {}
     const response = await api.get(`/graph/search`, {
       params: { q, limit },
       timeout: 20000,
@@ -887,6 +892,12 @@ export const expandGraph = async ({
   maxNeighbors = 10,
 }) => {
   try {
+    try {
+      const h = await api.get(`/graph/health`, { timeout: 5000 });
+      if (!h.data?.enabled || h.data?.status === "disabled") {
+        return { nodes: [], edges: [] };
+      }
+    } catch {}
     const payload = {};
     if (entities && entities.length) payload.entities = entities;
     if (chunkIds && chunkIds.length) payload.chunk_ids = chunkIds;

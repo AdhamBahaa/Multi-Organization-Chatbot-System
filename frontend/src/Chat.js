@@ -27,6 +27,11 @@ function Chat({ user }) {
   const inputRef = useRef(null);
   const recognitionRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const scrollToBottom = () => {
+    try {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    } catch {}
+  };
   const isRecordingRef = useRef(false); // Add ref to track recording state
   const silenceTimerRef = useRef(null); // Add ref for silence detection timer
   const lastSpeechTimeRef = useRef(Date.now()); // Track when speech was last detected
@@ -38,10 +43,6 @@ function Chat({ user }) {
   const [showGraph, setShowGraph] = useState(false);
   const [graphData, setGraphData] = useState({ nodes: [], edges: [] });
   const [graphLoading, setGraphLoading] = useState(false);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
 
   // Feedback functions
   const handleFeedbackClick = (message) => {
@@ -513,18 +514,6 @@ function Chat({ user }) {
 
   const formatTime = (date) => {
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  };
-
-  const getConfidenceColor = (confidence) => {
-    if (confidence >= 0.8) return "high";
-    if (confidence >= 0.6) return "medium";
-    return "low";
-  };
-
-  const getConfidenceLabel = (confidence) => {
-    if (confidence >= 0.8) return "High";
-    if (confidence >= 0.6) return "Medium";
-    return "Low";
   };
 
   const formatSessionId = (sessionId) => {
@@ -1063,7 +1052,7 @@ function Chat({ user }) {
         </div>
       )}
       {showGraph && (
-        <div className="graph-overlay">
+        <div className="graph-under-chat">
           <GraphExplorer
             graph={graphData}
             loading={graphLoading}

@@ -6,7 +6,6 @@ import {
   debugOrganizationDocuments,
   getDocumentChunks,
   getGraphHealth,
-  reindexGraph,
   startGraphReindexBackground,
   getGraphReindexStatus,
   getGraphDocumentSummary,
@@ -34,7 +33,6 @@ function Settings() {
   const [graphHealth, setGraphHealth] = useState(null);
   const [graphLoading, setGraphLoading] = useState(false);
   const [graphActionMsg, setGraphActionMsg] = useState("");
-  const [graphJob, setGraphJob] = useState(null);
   const [docSummaries, setDocSummaries] = useState({});
   const [vecLoading, setVecLoading] = useState(false);
   const [vecActionMsg, setVecActionMsg] = useState("");
@@ -174,15 +172,13 @@ function Settings() {
     setGraphActionMsg("");
     try {
       // Prefer background job to avoid UI blocking
-      const start = await startGraphReindexBackground();
-      setGraphJob(start);
+  const start = await startGraphReindexBackground();
       setGraphActionMsg(`Reindex started (job: ${start.job_id}).`);
 
       // Poll status until done/error
       const poll = async () => {
         try {
           const s = await getGraphReindexStatus(start.job_id);
-          setGraphJob(s);
           if (s.state === "done") {
             setGraphActionMsg(
               `Reindex completed: indexed ${s.indexed ?? 0} document(s).`
@@ -240,18 +236,7 @@ function Settings() {
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "connected":
-      case "healthy":
-        return { bg: "#dcfce7", color: "#166534" };
-      case "error":
-      case "disconnected":
-        return { bg: "#fef2f2", color: "#dc2626" };
-      default:
-        return { bg: "#fef3c7", color: "#92400e" };
-    }
-  };
+  // Note: getStatusColor is unused here; if needed for future UI, reintroduce.
 
   const pill = (text, color) => (
     <span
